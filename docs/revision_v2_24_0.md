@@ -87,3 +87,46 @@ Windows 侧才有的 DWG/MDB 能力。本版目标：
 - LibreDWG 版本通过 `ARG LIBREDWG_VERSION` 固定，构建机需能访问 GitHub Release；离线交付
   采用「联网机 build → `docker save` → 目标机 `docker load`」。
 - `deploy/resources` 限额在 Compose 非 Swarm 下需 `--compatibility` 才生效。
+
+## 9. CI 自动构建与发布（双架构，2026-10-16 追加）
+
+### 9.1 目标
+在 GitHub Actions 上构建 5 个镜像的 **multi-arch manifest**（`linux/amd64` + `linux/arm64`）
+并推送至 Docker Hub。
+
+### 9.2 工作流
+- `.github/workflows/docker-publish.yml`：
+  - 触发：`workflow_dispatch`（可填 tag）+ `push tags: v*`；
+  - matrix = 2 runner × 5 镜像 = **10 个 build job**，各推 `<tag>-<arch>`；
+  - `merge-manifest` job 用 `docker buildx imagetools create` 合并为多架构 manifest
+    并 `imagetools inspect` 校验；
+  - **架构策略：原生 runner**（公开仓库免费）——`linux/amd64` → `ubuntu-latest`，
+    `linux/arm64` → `ubuntu-24.04-arm`（**原生 ARM，无需 QEMU**，快且稳定）；
+  - 缓存：`type=gha,scope=<arch>`；`provenance: false`。
+- 必需 Secrets：`DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN`；可选 Variable：`DOCKERHUB_REGISTRY`（默认 `docker.io`）。
+- `.github/workflows/ci.yml`：`test` / `smoke` / `prod-config`（`prod-config` 的 `bash -n` 已纳入
+  `build_push.sh`、`gen_htpasswd.sh`）。
+
+### 9.3 构建期修复（CI 暴露）
+| 编号 | 现象 | 修复 |
+|------|------|------|
+| B1 | `libmdbodbc1` 在 bookworm 无候选包 | 改装 `odbc-mdbtools`；`odbcinst.ini` 驱动路径改为动态探测（兼容 arm64 路径） |
+| B2 | LibreDWG `configure: no suitable Python interpreter` | `configure` 增 `--disable-python`；builder 阶段装 `python3` |
+| B3 | arm64 下载 LibreDWG 偶发 `curl (28) 连接超时` | curl 增 `--retry 5 --retry-delay 5 --retry-all-errors` |
+| B4 | QEMU 模拟 arm64 编译 LibreDWG 极慢 | 改用原生 `ubuntu-24.04-arm` runner，弃用 QEMU |
+
+### 9.4 验证结果
+- Run `38900892791`：**11/11 job 成功**（10 build + merge-manifest）。
+- 5 个镜像 `2.24.0` 均生成 `application/vnd.oci.image.index.v1+json`，含 `linux/amd64` + `linux/arm64`：
+
+| 镜像 | manifest digest |
+|------|-----------------|
+| `vcs-api`    | `sha256:1a17dec0237627baf9d22478c9769f599bee2644ebe11f73ce7305db4698b423` |
+| `vcs-worker` | `sha256:2536642d07931a28db536b10cfbaf4517e418be7454758c865d1c3a7c7bf8319` |
+| `vcs-beat`   | `sha256:416582e4ccfd7f4b9b306418cc70d5df2ae84b0174698b3dfff7a301e22b00ef` |
+| `vcs-flower` | `sha256:550c9786e35ce2c0e419eee3c66f0280e124145a56233cb54e557d9cd17a42a0` |
+| `vcs-nginx`  | `sha256:fc5b17b0005a37c3a5b6a89ca349265760716e94d5a88378344bbfbb5ee847298` |
+
+### 9.5 遗留
+- Docker Hub PAT 曾明文暴露，**须 revoke 后重建并更新 `DOCKERHUB_TOKEN` Secret**。
+- 目标生产机如无法访问 Docker Hub，需改推内网 registry（设 `DOCKERHUB_REGISTRY`）或 `docker save/load`。
