@@ -6,7 +6,8 @@ ARG LIBREDWG_VERSION=0.13.3
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential ca-certificates curl pkg-config libpcre2-dev python3 \
     && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL -o /tmp/libredwg.tar.gz \
+RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+        -o /tmp/libredwg.tar.gz \
         "https://github.com/LibreDWG/libredwg/releases/download/${LIBREDWG_VERSION}/libredwg-${LIBREDWG_VERSION}.tar.gz" \
     && mkdir -p /src && tar -xzf /tmp/libredwg.tar.gz -C /src --strip-components=1 \
     && cd /src && ./configure \
