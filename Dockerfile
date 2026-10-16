@@ -19,7 +19,7 @@ FROM python:3.11.11-slim AS base
 # GDAL 运行时 + ODBC/MDB + LibreDWG 运行依赖 + 构建工具（构建后移除）
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gdal-bin libgdal-dev libgeos-dev libproj-dev libpq-dev \
-        unixodbc unixodbc-dev mdbtools libmdbodbc1 libpcre2-8-0 \
+        unixodbc unixodbc-dev mdbtools odbc-mdbtools libpcre2-8-0 \
         gcc g++ curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,8 +32,10 @@ COPY --from=libredwg-builder /out/usr/local/ /usr/local/
 RUN ldconfig
 
 # MDBTools ODBC 驱动注册（pyodbc 经 odbcinst.ini 解析 DRIVER={MDBTools}）
-RUN printf '[MDBTools]\nDescription=MDB Tools ODBC\nDriver=/usr/lib/x86_64-linux-gnu/odbc/libmdbodbc.so\n' \
-        > /etc/odbcinst.ini \
+# 路径动态探测，兼容 amd64 / arm64（/usr/lib/<triplet>/odbc/libmdbodbc.so）
+RUN MDB_LIB="$(dpkg -L odbc-mdbtools | grep -m1 '/libmdbodbc\.so$')" \
+    && test -n "$MDB_LIB" \
+    && printf '[MDBTools]\nDescription=MDB Tools ODBC\nDriver=%s\n' "$MDB_LIB" > /etc/odbcinst.ini \
     && (dwg2dxf --version 2>/dev/null || true)
 
 WORKDIR /app
