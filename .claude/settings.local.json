@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(unzip *)",
+      "Bash(pip --version)",
+      "Bash(where redis-server *)",
+      "Bash(where pg_isready)",
+      "Bash(sc query *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(.venv/Scripts/python -m pip install --upgrade pip)",
+      "Bash(.venv/Scripts/pip install *)",
+      "Bash(.venv/Scripts/python scripts/init_db.py)",
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python *)",
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/uvicorn app.main:app *)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s http://localhost:8000/)",
+      "Bash(curl -s http://localhost:8000/docs -o /dev/null -w \"Swagger docs: HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8000/api/v1/capabilities -H \"X-API-Key: vcs_n1sdyn61bxDFKhh59GexzbYBQjtU6vOWI7wEmw1Pe6M\")",
+      "Bash(curl -s http://localhost:8000/api/v1/jobs -H \"X-API-Key: vcs_n1sdyn61bxDFKhh59GexzbYBQjtU6vOWI7wEmw1Pe6M\")",
+      "Bash(taskkill //F //IM uvicorn.exe)",
+      "Bash(taskkill //F //IM python.exe)",
+      "Bash(curl -s http://localhost:8000/app/ -o /dev/null -w \"Frontend: HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8000/api/v1/capabilities -H \"X-API-Key: vcs_pZKyiwdaJG7irN-fCS1bhXGZDBETZoDsR2zybUpK5Z8\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/admin/apikeys -H \"X-Admin-Init-Key: dev-admin-init-key\" -H \"Content-Type: application/json\" -d '{\"name\":\"test\",\"description\":\"test key\"}')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Format: {d[\\\\\"format_name\\\\\"]}, Encoding: {d[\\\\\"encoding\\\\\"]}, CRS: {d[\\\\\"crs_info\\\\\"]}, Confidence: {d[\\\\\"confidence\\\\\"]}'\\)\")",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/quality/check -H \"X-API-Key: vcs_pZKyiwdaJG7irN-fCS1bhXGZDBETZoDsR2zybUpK5Z8\" -F \"file=@/tmp/test1.geojson\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Score: {d[\\\\\"completeness_score\\\\\"]}, Issues: {len\\(d.get\\(\\\\\"issues\\\\\",[]\\)\\)}'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(cmd //c \"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\postgresql-installer.exe\" --help)"
+    ]
+  }
+}

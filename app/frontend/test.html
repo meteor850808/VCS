@@ -1,0 +1,1867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VCS — 全功能测试台</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0d1117;
+  --bg-secondary:#161b22;
+  --bg-card:#1c2333;
+  --bg-input:#0d1117;
+  --border:#30363d;
+  --text-primary:#e6edf3;
+  --text-secondary:#8b949e;
+  --text-muted:#484f58;
+  --accent:#58a6ff;
+  --accent-dim:#1f6feb;
+  --success:#3fb950;
+  --warning:#d29922;
+  --danger:#f85149;
+  --info:#79c0ff;
+  --radius:8px;
+  --radius-sm:4px;
+  --font-mono:'Cascadia Code','Fira Code','JetBrains Mono',Consolas,monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;
+}
+body{
+  font-family:var(--font-sans);background:var(--bg-primary);color:var(--text-primary);
+  line-height:1.5;
+}
+.topbar{
+  background:var(--bg-secondary);border-bottom:1px solid var(--border);
+  padding:16px 32px;display:flex;align-items:center;gap:24px;position:sticky;top:0;z-index:100;
+}
+.topbar h1{font-family:var(--font-mono);font-size:16px;color:var(--accent);}
+.topbar .subtitle{font-size:12px;color:var(--text-muted);}
+.topbar .spacer{flex:1;}
+.topbar input,.topbar select{
+  background:var(--bg-input);border:1px solid var(--border);color:var(--text-primary);
+  padding:6px 12px;border-radius:var(--radius-sm);font-size:13px;font-family:var(--font-mono);
+}
+.topbar input:focus{outline:none;border-color:var(--accent);}
+.topbar .key-status{font-size:11px;padding:4px 10px;border-radius:10px;}
+.key-status.ok{color:var(--success);background:rgba(63,185,80,.15);}
+.key-status.missing{color:var(--warning);background:rgba(210,153,34,.15);}
+.container{max-width:1200px;margin:0 auto;padding:24px 32px;}
+.section{margin-bottom:32px;}
+.section h2{font-size:18px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:10px;}
+.section h2 .count{font-size:12px;color:var(--text-muted);font-weight:400;}
+.section > p{font-size:13px;color:var(--text-secondary);margin-bottom:16px;}
+.stats-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.stat-box{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 20px;min-width:140px;flex:1;
+}
+.stat-box .num{font-family:var(--font-mono);font-size:28px;font-weight:700;}
+.stat-box .lbl{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.stat-box.pass .num{color:var(--success);}
+.stat-box.fail .num{color:var(--danger);}
+.stat-box.warn .num{color:var(--warning);}
+.stat-box.total .num{color:var(--info);}
+.test-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.test-card{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;transition:border-color .2s;
+}
+.test-card.pass{border-color:rgba(63,185,80,.4);}
+.test-card.fail{border-color:rgba(248,81,73,.4);}
+.test-card.warn{border-color:rgba(210,153,34,.4);}
+.test-card-header{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 16px;cursor:pointer;user-select:none;
+  border-bottom:1px solid var(--border);
+}
+.test-card-header:hover{background:rgba(255,255,255,.02);}
+.test-card-header .status-icon{font-size:16px;width:20px;text-align:center;}
+.test-card-header .method{
+  font-family:var(--font-mono);font-size:11px;font-weight:600;
+  padding:2px 8px;border-radius:4px;
+}
+.method.get{background:rgba(97,175,254,.15);color:#61affe;}
+.method.post{background:rgba(73,204,144,.15);color:#49cc90;}
+.method.delete{background:rgba(248,81,73,.15);color:var(--danger);}
+.test-card-header .path{font-size:13px;font-family:var(--font-mono);flex:1;}
+.test-card-header .status-badge{
+  font-size:11px;padding:2px 10px;border-radius:10px;font-weight:500;
+}
+.status-badge.pass{background:rgba(63,185,80,.15);color:var(--success);}
+.status-badge.fail{background:rgba(248,81,73,.15);color:var(--danger);}
+.status-badge.skip{background:rgba(139,148,158,.15);color:var(--text-secondary);}
+.test-card-body{display:none;padding:16px;}
+.test-card.open .test-card-body{display:block;}
+.test-card-body .param-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
+.test-card-body .param-row label{font-size:12px;color:var(--text-secondary);min-width:60px;align-self:center;}
+.test-card-body input[type=text],.test-card-body select,.test-card-body input[type=file]{
+  background:var(--bg-input);border:1px solid var(--border);color:var(--text-primary);
+  padding:6px 10px;border-radius:var(--radius-sm);font-size:13px;flex:1;font-family:var(--font-mono);
+}
+.test-card-body input:focus{outline:none;border-color:var(--accent);}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
+  cursor:pointer;border:none;transition:all .15s;font-family:var(--font-sans);
+}
+.btn-primary{background:var(--accent-dim);color:white;}
+.btn-primary:hover{background:var(--accent);}
+.btn-success{background:rgba(63,185,80,.2);color:var(--success);border:1px solid var(--success);}
+.btn-success:hover{background:rgba(63,185,80,.3);}
+.btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+.btn-danger:hover{background:var(--danger);color:white;}
+.btn-sm{padding:5px 14px;font-size:12px;}
+.btn-group{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap;}
+.btn-group .btn{flex:0 0 auto;}
+.result-box{
+  background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:12px;margin-top:12px;font-family:var(--font-mono);font-size:12px;
+  max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;
+  color:var(--text-secondary);display:none;
+}
+.result-box.show{display:block;}
+.result-box .r-status{color:var(--accent);font-weight:600;}
+.result-box .r-pass{color:var(--success);}
+.result-box .r-fail{color:var(--danger);}
+.result-box .r-info{color:var(--info);}
+.result-box .r-warn{color:var(--warning);}
+.full-width{grid-column:1/-1;}
+.upload-drop{
+  border:1px dashed var(--border);border-radius:var(--radius-sm);
+  padding:20px;text-align:center;margin-bottom:12px;cursor:pointer;
+  transition:all .2s;
+}
+.upload-drop:hover,.upload-drop.dragover{border-color:var(--accent);background:rgba(88,166,255,.04);}
+.upload-drop p{font-size:12px;color:var(--text-muted);}
+.upload-drop input{display:none;}
+.file-preview{font-size:11px;color:var(--text-secondary);padding:4px 0;}
+.summary-bar{
+  display:flex;gap:8px;align-items:center;margin-bottom:16px;
+  padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
+}
+.summary-bar .bar-label{font-size:13px;color:var(--text-secondary);}
+.summary-bar .bar-fill{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;display:flex;}
+.bar-fill .segment{transition:width .5s;}
+.bar-fill .seg-pass{background:var(--success);}
+.bar-fill .seg-fail{background:var(--danger);}
+.bar-fill .seg-skip{background:var(--text-muted);}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+pre{font-size:11px;line-height:1.6;}
+.section-toggle{cursor:pointer;user-select:none;}
+.section-toggle:hover{opacity:.8;}
+@media(max-width:800px){.test-grid{grid-template-columns:1fr;}.topbar{flex-wrap:wrap;}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>VCS Testbench</h1>
+  <span class="subtitle">全功能测试台</span>
+  <div class="spacer"></div>
+  <label style="font-size:12px;color:var(--text-muted);">Server:</label>
+  <input id="serverUrl" style="width:180px;">
+  <label style="font-size:12px;color:var(--text-muted);">API Key:</label>
+  <input id="apiKeyInput" type="text" placeholder="vcs_..." style="width:280px;">
+  <span id="keyStatus" class="key-status missing">未设置</span>
+</div>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-box total"><div class="num" id="statTotal">0</div><div class="lbl">测试总数</div></div>
+    <div class="stat-box pass"><div class="num" id="statPass">0</div><div class="lbl">通过</div></div>
+    <div class="stat-box fail"><div class="num" id="statFail">0</div><div class="lbl">失败</div></div>
+    <div class="stat-box warn"><div class="num" id="statWarn">0</div><div class="lbl">警告/跳过</div></div>
+  </div>
+
+  <!-- Summary Bar -->
+  <div class="summary-bar">
+    <span class="bar-label">总体进度</span>
+    <div class="bar-fill" id="summaryBar"><div class="segment seg-pass" style="width:0%"></div><div class="segment seg-fail" style="width:0%"></div><div class="segment seg-skip" style="width:100%"></div></div>
+    <span id="summaryText" style="font-size:12px;color:var(--text-muted);">等待测试...</span>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="btn-group">
+    <button class="btn btn-success" onclick="runAllTests()">▶ 运行全部测试</button>
+    <button class="btn btn-primary" onclick="runPassTests()">▶ 运行通过的测试</button>
+    <button class="btn btn-danger" onclick="resetAll()">⟳ 重置所有</button>
+    <button class="btn btn-primary btn-sm" onclick="toggleAll()">展开/折叠全部</button>
+  </div>
+
+  <!-- ===== 1. 基础检查 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">🔍 基础检查 <span class="count">(2 项)</span></h2>
+    <p>服务状态和 API 连通性基础检测</p>
+    <div class="test-grid">
+      <!-- Health -->
+      <div class="test-card" id="card-health">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/health</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">服务健康检查（无需鉴权）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testHealth()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-health"></div>
+        </div>
+      </div>
+      <!-- Capabilities -->
+      <div class="test-card" id="card-capabilities">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/capabilities</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">查询服务支持的输入/输出格式和坐标系</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testCapabilities()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-capabilities"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 2. 格式检测 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">📄 格式检测 <span class="count">(2 项)</span></h2>
+    <p>测试文件格式自动识别能力（使用预置 GeoJSON 样本）</p>
+    <div class="test-grid">
+      <!-- Detect GeoJSON -->
+      <div class="test-card" id="card-detect-geojson">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/detect</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">上传 GeoJSON 文件检测格式、编码、CRS</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDetectGeoJSON()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-detect-geojson"></div>
+        </div>
+      </div>
+      <!-- Detect unknown format -->
+      <div class="test-card" id="card-detect-unknown">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/detect (未知格式)</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">上传未知格式文件，验证置信度 < 50%</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDetectUnknown()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-detect-unknown"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 3. 转换任务 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">🔄 转换任务 <span class="count">(4 项)</span></h2>
+    <p>测试转换任务提交、查询、列表和删除流程</p>
+    <div class="test-grid">
+      <!-- Submit conversion -->
+      <div class="test-card" id="card-submit">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/convert</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>dst_crs</label><input id="submitDstCrs" value="EPSG:4490">
+            <label>格式</label><select id="submitFormat"><option>GeoJSON</option><option>SHP</option><option>GPKG</option><option>KML</option></select>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testSubmitConversion()">▶ 提交转换</button>
+          </div>
+          <div class="result-box" id="result-submit"></div>
+        </div>
+      </div>
+      <!-- List jobs -->
+      <div class="test-card" id="card-list-jobs">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/jobs</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">查询当前 API Key 的所有转换任务</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testListJobs()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-list-jobs"></div>
+        </div>
+      </div>
+      <!-- Job detail -->
+      <div class="test-card" id="card-job-detail">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/jobs/{id}</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>job_id</label><input id="jobDetailId" placeholder="粘贴 job_id">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testJobDetail()">▶ 执行测试</button>
+            <button class="btn btn-sm" onclick="fetchLastJobId()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border);">填入最新 job_id</button>
+          </div>
+          <div class="result-box" id="result-job-detail"></div>
+        </div>
+      </div>
+      <!-- Capabilities (reuse) -->
+      <div class="test-card" id="card-list-formats">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/capabilities (格式/CRS)</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">验证返回的格式列表和坐标系列表完整性</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testFormatList()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-list-formats"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 4. 质量检查 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">📊 质量检查 <span class="count">(3 项)</span></h2>
+    <p>测试数据质量分析功能</p>
+    <div class="test-grid">
+      <!-- Complete quality -->
+      <div class="test-card" id="card-quality-complete">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/quality/check（完整数据）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">检查包含 YWBH/FEATURECODE 的完整数据，期望评分高</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testQualityComplete()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-quality-complete"></div>
+        </div>
+      </div>
+      <!-- Incomplete quality -->
+      <div class="test-card" id="card-quality-incomplete">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/quality/check（缺关键字段）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">检查缺少 YWBH/FEATURECODE 的数据，期望评分 < 1.0</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testQualityIncomplete()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-quality-incomplete"></div>
+        </div>
+      </div>
+      <!-- List reports -->
+      <div class="test-card" id="card-quality-list">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/quality</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">查询质量报告列表</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testQualityList()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-quality-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 5. 批量转换 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">📦 批量转换 <span class="count">(2 项)</span></h2>
+    <p>测试多文件批量上传和批量任务管理</p>
+    <div class="test-grid">
+      <!-- Batch submit -->
+      <div class="test-card" id="card-batch">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/batch/convert</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>dst_crs</label><input id="batchDstCrs" value="EPSG:4490">
+            <label>格式</label><select id="batchFormat"><option>GeoJSON</option><option>SHP</option><option>GPKG</option></select>
+          </div>
+          <div class="upload-drop" id="batchDrop" onclick="document.getElementById('batchFiles').click()">
+            <p>📁 点击选择多个文件测试批量上传</p>
+            <input type="file" id="batchFiles" multiple onchange="updateBatchFiles(this)">
+          </div>
+          <div class="file-preview" id="batchPreview">未选择文件</div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testBatchSubmit()">▶ 提交批量</button>
+          </div>
+          <div class="result-box" id="result-batch"></div>
+        </div>
+      </div>
+      <!-- List batch -->
+      <div class="test-card" id="card-batch-list">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/batch</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">查询批量任务列表</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testBatchList()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-batch-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 6. API Key 管理 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">🔑 API Key 管理 <span class="count">(3 项)</span></h2>
+    <p>测试管理员 API Key 的创建、查询和删除</p>
+    <div class="test-grid">
+      <!-- Create key -->
+      <div class="test-card" id="card-admin-create">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/admin/apikeys（创建）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>名称</label><input id="adminKeyName" value="test_key_$(date)">
+            <label>Admin Key</label><input id="adminInitKey" placeholder="admin-init-key" value="dev-admin-init-key">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testAdminCreateKey()">▶ 创建 Key</button>
+          </div>
+          <div class="result-box" id="result-admin-create"></div>
+        </div>
+      </div>
+      <!-- List keys -->
+      <div class="test-card" id="card-admin-list">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/admin/apikeys（列表）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testAdminListKeys()">▶ 查询列表</button>
+          </div>
+          <div class="result-box" id="result-admin-list"></div>
+        </div>
+      </div>
+      <!-- Revoke key -->
+      <div class="test-card" id="card-admin-revoke">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method delete">DELETE</span>
+          <span class="path">/api/v1/admin/apikeys/{id}</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>选择 Key</label><select id="adminRevokeId"><option value="">请选择...</option></select>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-sm" onclick="refreshAdminKeyList()" style="background:var(--bg-input);color:var(--text-secondary);border:1px solid var(--border);">↻ 刷新</button>
+            <button class="btn btn-danger btn-sm" onclick="testAdminRevokeKey()">▶ 删除</button>
+          </div>
+          <div class="result-box" id="result-admin-revoke"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 7. 安全测试 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">🛡️ 安全测试 <span class="count">(3 项)</span></h2>
+    <p>验证路径遍历防护、文件类型白名单和未授权访问</p>
+    <div class="test-grid">
+      <!-- Unauthorized -->
+      <div class="test-card" id="card-sec-unauth">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">无 API Key 访问</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">不传 X-API-Key 访问受保护端点，期望 401</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testUnauthorized()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-sec-unauth"></div>
+        </div>
+      </div>
+      <!-- Path traversal -->
+      <div class="test-card" id="card-sec-traversal">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">路径遍历防护</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">上传文件名含 ../ 的恶意文件，期望 400</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testPathTraversal()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-sec-traversal"></div>
+        </div>
+      </div>
+      <!-- Exe rejection -->
+      <div class="test-card" id="card-sec-exe">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">可执行文件拦截</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">上传 .exe 文件，期望 400</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testExeRejection()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-sec-exe"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 8. 数据存储 API ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">💾 数据存储 API <span class="count">(5 项)</span></h2>
+    <p>测试数据上传到数据库、列表、下载、删除</p>
+    <div class="test-grid">
+      <!-- Data upload -->
+      <div class="test-card" id="card-data-upload">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/data/upload</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">上传 GeoJSON 文件到数据库并返回文件 ID</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDataUpload()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-data-upload"></div>
+        </div>
+      </div>
+      <!-- Data list -->
+      <div class="test-card" id="card-data-list">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/data</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">查询已上传文件列表</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDataList()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-data-list"></div>
+        </div>
+      </div>
+      <!-- Data download -->
+      <div class="test-card" id="card-data-download">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/data/{id}/download</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">下载已上传文件并验证内容</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDataDownload()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-data-download"></div>
+        </div>
+      </div>
+      <!-- Data search -->
+      <div class="test-card" id="card-data-search">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/data?search=</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">按文件名搜索已上传的文件</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDataSearch()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-data-search"></div>
+        </div>
+      </div>
+      <!-- Data delete -->
+      <div class="test-card" id="card-data-delete">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method delete">DELETE</span>
+          <span class="path">/api/v1/data/{id}</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">删除已上传的文件</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testDataDelete()">▶ 执行测试</button>
+          </div>
+          <div class="result-box" id="result-data-delete"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 9. 数据标准 v2（S9 层组多分类） ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">📐 数据标准 v2 · S9 多分类 <span class="count">(12 项)</span></h2>
+    <p>针对 S9（表归属多分类 / 主归属 / 移动·复制·删除规则 / 嵌套树回滚）新增与变更端点的专项测试</p>
+    <div class="btn-group">
+      <button class="btn btn-primary btn-sm" onclick="s9FillAll()">🔄 填充状态到输入框</button>
+      <span style="font-size:12px;color:var(--text-muted);align-self:center;">先运行「一键 S9 场景」自动建库并填充 ID，也可手动填写后单点测试</span>
+    </div>
+    <div class="test-grid">
+      <!-- S9 完整场景 -->
+      <div class="test-card full-width" id="card-s9-scenario">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">E2E</span>
+          <span class="path">一键 S9 场景（建标准→树→表→归属→移动/复制→发布→回滚→清理）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">自建标准 STD/STD2 → 层组 A/A1/B/C → 表 T1（主归属自动）→ 次挂载 B → B5 守卫 → 主归属转移 → 摘挂 → B2 防环 400 → B3 跨标准移动 400 → B1 跨标准复制 → 发布×2 → 版本列表 → 嵌套树回滚 → 清理。结束后自动填充下方 ID。</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9Scenario()">▶ 运行 S9 完整场景</button>
+          </div>
+          <div class="result-box" id="result-s9-scenario"></div>
+        </div>
+      </div>
+      <!-- 创建标准 -->
+      <div class="test-card" id="card-s9-create-std">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/data-standards-v2（创建标准）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>名称</label><input id="s9StdName" placeholder="留空自动生成（标准名唯一）">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9CreateStd()">▶ 创建标准</button>
+          </div>
+          <div class="result-box" id="result-s9-create-std"></div>
+        </div>
+      </div>
+      <!-- 创建层组 -->
+      <div class="test-card" id="card-s9-create-layer">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/data-standards-v2/{sid}/layers（创建层组）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>标准 ID</label><input id="s9StdId" placeholder="粘贴标准 ID">
+            <label>层组名</label><input id="s9LayerName" value="新层组">
+          </div>
+          <div class="param-row">
+            <label>父层组</label><input id="s9LayerParentId" placeholder="留空=顶层">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9CreateLayer()">▶ 创建层组</button>
+          </div>
+          <div class="result-box" id="result-s9-create-layer"></div>
+        </div>
+      </div>
+      <!-- 创建数据表 -->
+      <div class="test-card" id="card-s9-create-table">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/layers/{lid}/tables（建表 → 自动主归属）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>层组 ID</label><input id="s9LayerId" placeholder="粘贴层组 ID">
+            <label>表名</label><input id="s9TableName" value="新数据表">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】创建表即自动挂主归属（standard_tables.layer_id + 关联表 is_primary=True 双真源同步）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9CreateTable()">▶ 创建表</button>
+          </div>
+          <div class="result-box" id="result-s9-create-table"></div>
+        </div>
+      </div>
+      <!-- 层组表列表 -->
+      <div class="test-card" id="card-s9-list-tables">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/layers/{lid}/tables（含次归属 + is_primary）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>层组 ID</label><input id="s9ListTablesLayerId" placeholder="粘贴层组 ID">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】经关联表 join 返回本层组下全部表（含次归属），每条带 is_primary（主=✅ / 次=🔗）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9ListTables()">▶ 查询</button>
+          </div>
+          <div class="result-box" id="result-s9-list-tables"></div>
+        </div>
+      </div>
+      <!-- 表归属查询 -->
+      <div class="test-card" id="card-s9-table-layers">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method get">GET</span>
+          <span class="path">/api/v1/tables/{tid}/layers（表归属列表）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>表 ID</label><input id="s9TableId" placeholder="粘贴表 ID">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】返回该表的全部归属层组（主归属 + 次归属），主归属在前</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9TableLayers()">▶ 查询</button>
+          </div>
+          <div class="result-box" id="result-s9-table-layers"></div>
+        </div>
+      </div>
+      <!-- 挂载/摘挂/转移 -->
+      <div class="test-card" id="card-s9-attach">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST/DELETE</span>
+          <span class="path">/api/v1/layers/{lid}/tables/{tid}/attach（挂载管理）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>层组 ID</label><input id="s9AttachLayerId" placeholder="目标层组 ID">
+            <label>表 ID</label><input id="s9AttachTableId" placeholder="表 ID">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】挂载=加次归属；设为主归属=转移主归属（原主降级 + layer_id 同步）；摘挂=移除次归属（主归属摘挂 400）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9Attach('attach')">🔗 挂载（次归属）</button>
+            <button class="btn btn-primary btn-sm" onclick="testS9Attach('primary')">⭐ 设为主归属</button>
+            <button class="btn btn-danger btn-sm" onclick="testS9Attach('detach')">✂ 摘挂</button>
+          </div>
+          <div class="result-box" id="result-s9-attach"></div>
+        </div>
+      </div>
+      <!-- 移动层组 -->
+      <div class="test-card" id="card-s9-move">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/layers/{lid}/move（移动层组）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>层组 ID</label><input id="s9MoveLayerId" placeholder="被移动层组 ID">
+            <label>目标父</label><input id="s9MoveParentId" placeholder="新父层组 ID（留空=顶层）">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】B2 移到自身/子孙 → 400；B3 跨标准移动 → 400「请使用复制」；正常移动 → 200</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9Move()">▶ 移动</button>
+          </div>
+          <div class="result-box" id="result-s9-move"></div>
+        </div>
+      </div>
+      <!-- 复制层组 -->
+      <div class="test-card" id="card-s9-copy">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST</span>
+          <span class="path">/api/v1/layers/{lid}/copy（复制层组）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>层组 ID</label><input id="s9CopyLayerId" placeholder="被复制层组 ID">
+            <label>目标标准</label><input id="s9DstStandardId" placeholder="留空=同标准复制">
+          </div>
+          <div class="param-row">
+            <label>新名称</label><input id="s9CopyName" placeholder="留空=原名 (副本)">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】B1 跨标准复制：传 new_standard_id 复制到其他标准（同标准保留子树外次归属 / 跨标准丢弃子树外次归属）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9Copy()">▶ 复制</button>
+          </div>
+          <div class="result-box" id="result-s9-copy"></div>
+        </div>
+      </div>
+      <!-- 删除层组 -->
+      <div class="test-card" id="card-s9-delete-layer">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method delete">DELETE</span>
+          <span class="path">/api/v1/layers/{lid}（删除层组）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>层组 ID</label><input id="s9DeleteLayerId" placeholder="粘贴层组 ID">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】B5 删除守卫：子树内主归属表若被子树外层组引用 → 400「请先摘挂」；无共享引用 → 204（主层组删除级联删表，次归属层组删除仅摘挂）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9DeleteLayer()">▶ 删除</button>
+          </div>
+          <div class="result-box" id="result-s9-delete-layer"></div>
+        </div>
+      </div>
+      <!-- 发布/版本/回滚 -->
+      <div class="test-card" id="card-s9-version">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method post">POST/GET</span>
+          <span class="path">发布 / 版本列表 / 回滚（嵌套树）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>标准 ID</label><input id="s9VerStdId" placeholder="粘贴标准 ID">
+            <label>回滚版本</label><input id="s9Version" value="1">
+          </div>
+          <div class="param-row">
+            <label>变更说明</label><input id="s9ChangeLog" value="testbench 发布">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">【S9】发布创建版本快照（顶层仅根层组）；回滚到历史版本 → 201（修复嵌套树快照含扁平子层组导致回滚 500 的真实 bug）</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9Publish()">📦 发布</button>
+            <button class="btn btn-primary btn-sm" onclick="testS9Versions()">📋 版本列表</button>
+            <button class="btn btn-primary btn-sm" onclick="testS9Rollback()">↩ 回滚到 v{n}</button>
+          </div>
+          <div class="result-box" id="result-s9-version"></div>
+        </div>
+      </div>
+      <!-- 删除标准 -->
+      <div class="test-card" id="card-s9-delete-std">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">⚪</span>
+          <span class="method delete">DELETE</span>
+          <span class="path">/api/v1/data-standards-v2/{sid}（删除标准）</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="param-row">
+            <label>标准 ID</label><input id="s9DelStdId" placeholder="粘贴标准 ID">
+          </div>
+          <div class="param-row"><label>说明</label><span style="font-size:12px;color:var(--text-secondary);">级联删除标准下全部层组/表/字段/版本</span></div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testS9DeleteStd()">▶ 删除标准</button>
+          </div>
+          <div class="result-box" id="result-s9-delete-std"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 10. 自定义测试 ===== -->
+  <div class="section">
+    <h2 class="section-toggle" onclick="toggleSection(this)">📁 自定义上传测试 <span class="count">(1 项)</span></h2>
+    <p>上传任意真实矢量文件测试</p>
+    <div class="test-grid">
+      <div class="test-card full-width" id="card-custom">
+        <div class="test-card-header" onclick="toggleCard(this)">
+          <span class="status-icon">🔧</span>
+          <span class="method post">POST</span>
+          <span class="path">自定义上传测试所有端点</span>
+          <span class="status-badge skip">未测试</span>
+        </div>
+        <div class="test-card-body">
+          <div class="upload-drop" id="customDrop" onclick="document.getElementById('customFile').click()">
+            <p>📁 选择矢量文件（.geojson / .shp / .kml / .gml / .gpkg / .dxf）</p>
+            <input type="file" id="customFile" onchange="updateCustomFile(this)">
+          </div>
+          <div class="file-preview" id="customPreview">未选择文件</div>
+          <div class="param-row" style="margin-top:12px;">
+            <label>目标 CRS</label><input id="customDstCrs" value="EPSG:4490" style="max-width:150px;">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="testCustomDetect()">📄 格式检测</button>
+            <button class="btn btn-primary btn-sm" onclick="testCustomQuality()">📊 质量检查</button>
+            <button class="btn btn-primary btn-sm" onclick="testCustomConvert()">🔄 提交转换</button>
+          </div>
+          <div class="result-box" id="result-custom"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+const RESULTS = {};
+const SAMPLE_GEOJSON = JSON.stringify({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[116.4,39.9]},"properties":{"name":"北京","YWBH":"BJ001","FEATURECODE":"POI"}}]});
+const SAMPLE_INCOMPLETE = JSON.stringify({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[116.4,39.9]},"properties":{"name":"北京","YWBH":null,"FEATURECODE":null}}]});
+const SAMPLE_UNKNOWN = "some random text that is not a valid format";
+let _batchFiles = [];
+let _customFile = null;
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const savedKey = localStorage.getItem('vcs_test_api_key');
+  const savedUrl = localStorage.getItem('vcs_test_server_url');
+  if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+  document.getElementById('serverUrl').value = savedUrl || window.location.origin;
+  updateKeyStatus();
+  updateStats();
+});
+
+document.getElementById('apiKeyInput').addEventListener('input', () => {
+  localStorage.setItem('vcs_test_api_key', document.getElementById('apiKeyInput').value);
+  updateKeyStatus();
+});
+document.getElementById('serverUrl').addEventListener('input', () => {
+  localStorage.setItem('vcs_test_server_url', document.getElementById('serverUrl').value);
+});
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function baseUrl() { return document.getElementById('serverUrl').value.replace(/\/+$/, ''); }
+function apiKey() { return document.getElementById('apiKeyInput').value.trim(); }
+function headers(extra) { return {'X-API-Key': apiKey(), 'Content-Type':'application/json', ...extra}; }
+function updateKeyStatus() {
+  const el = document.getElementById('keyStatus');
+  if (apiKey()) { el.textContent = '✅ 已设置'; el.className = 'key-status ok'; }
+  else { el.textContent = '❌ 未设置'; el.className = 'key-status missing'; }
+}
+function toggleCard(header) {
+  header.parentElement.classList.toggle('open');
+}
+function toggleAll() {
+  const all = document.querySelectorAll('.test-card');
+  const anyOpen = Array.from(all).some(c => c.classList.contains('open'));
+  all.forEach(c => c.classList.toggle('open', !anyOpen));
+}
+function toggleSection(el) {
+  const grid = el.parentElement.querySelector('.test-grid');
+  if (grid) grid.style.display = grid.style.display === 'none' ? '' : 'none';
+}
+
+function setStatus(cardId, status, msg) {
+  const card = document.getElementById('card-' + cardId);
+  if (!card) return;
+  const badge = card.querySelector('.status-badge');
+  const icon = card.querySelector('.status-icon');
+  const wasOpen = card.classList.contains('open');
+  card.className = 'test-card ' + status;
+  if (wasOpen) card.classList.add('open');
+  badge.textContent = {pass:'✓ 通过', fail:'✗ 失败', warn:'⚠ 跳过'}[status] || status;
+  badge.className = 'status-badge ' + status;
+  icon.textContent = {pass:'✅', fail:'❌', warn:'⚠️'}[status] || '⚪';
+  RESULTS[cardId] = status;
+  updateStats();
+}
+
+function showResult(cardId, data) {
+  const el = document.getElementById('result-' + cardId);
+  if (!el) return;
+  el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  el.className = 'result-box show';
+}
+
+function updateStats() {
+  const values = Object.values(RESULTS);
+  const total = values.length;
+  const pass = values.filter(v => v === 'pass').length;
+  const fail = values.filter(v => v === 'fail').length;
+  const warn = values.filter(v => v === 'warn').length;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statPass').textContent = pass;
+  document.getElementById('statFail').textContent = fail;
+  document.getElementById('statWarn').textContent = warn;
+
+  const pct = total ? (pass/total*100) : 0;
+  const fPct = total ? (fail/total*100) : 0;
+  const wPct = total ? (warn/total*100) : 0;
+  document.getElementById('summaryBar').innerHTML =
+    `<div class="segment seg-pass" style="width:${pct}%"></div>` +
+    `<div class="segment seg-fail" style="width:${fPct}%"></div>` +
+    `<div class="segment seg-skip" style="width:${wPct}%"></div>`;
+  document.getElementById('summaryText').textContent =
+    total ? `${pass}/${total} 通过，${fail} 失败，${warn} 跳过` : '等待测试...';
+}
+
+async function apiCall(method, path, opts = {}) {
+  const url = baseUrl() + path;
+  const fetchOpts = { method, headers: {'X-API-Key': apiKey()} };
+  if (opts.body) {
+    if (opts.formData) {
+      fetchOpts.body = opts.body;
+    } else {
+      fetchOpts.headers['Content-Type'] = 'application/json';
+      fetchOpts.body = JSON.stringify(opts.body);
+    }
+  }
+  if (opts.headers) Object.assign(fetchOpts.headers, opts.headers);
+  // 超时保护：自检串行 await，任一请求挂起会卡死整个测试流程
+  const _ctrl = new AbortController();
+  const _timer = setTimeout(() => _ctrl.abort(), 15000);
+  let resp;
+  try {
+    resp = await fetch(url, Object.assign({}, fetchOpts, { signal: _ctrl.signal }));
+  } catch (e) {
+    clearTimeout(_timer);
+    throw e;
+  }
+  clearTimeout(_timer);
+  let data;
+  try { data = await resp.json(); } catch(e) { data = {raw: ''}; }
+  return { status: resp.status, ok: resp.ok, data };
+}
+
+function resetAll() {
+  Object.keys(RESULTS).forEach(k => delete RESULTS[k]);
+  document.querySelectorAll('.result-box').forEach(el => { el.className = 'result-box'; el.textContent = ''; });
+  document.querySelectorAll('.test-card').forEach(el => {
+    el.className = 'test-card';
+    const badge = el.querySelector('.status-badge');
+    const icon = el.querySelector('.status-icon');
+    if (badge) { badge.textContent = '未测试'; badge.className = 'status-badge skip'; }
+    if (icon) icon.textContent = '⚪';
+  });
+  updateStats();
+  document.getElementById('summaryText').textContent = '已重置';
+}
+
+// ── Individual Tests ─────────────────────────────────────────────────────────
+async function testHealth() {
+  const el = document.getElementById('result-health');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/health');
+    const ok = r.status === 200 && r.data.status;
+    el.innerHTML = `<span class="r-status">${r.status}</span> ${JSON.stringify(r.data, null, 2)}`;
+    setStatus('health', ok ? 'pass' : 'fail');
+    if (!ok) el.innerHTML += '\n<span class="r-fail">✗ 期望 status 字段存在</span>';
+  } catch(e) { el.innerHTML = `<span class="r-fail">连接失败: ${e.message}</span>`; setStatus('health', 'fail'); }
+}
+
+async function testCapabilities() {
+  const el = document.getElementById('result-capabilities');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/capabilities');
+    const ok = r.status === 200 && r.data.input_formats && r.data.output_formats;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 输入格式: ${(r.data.input_formats||[]).join(', ')}\n输出格式: ${(r.data.output_formats||[]).join(', ')}\n坐标系: ${(r.data.supported_crs||[]).join(', ')}`;
+    setStatus('capabilities', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('capabilities', 'fail'); }
+}
+
+async function testDetectGeoJSON() {
+  const el = document.getElementById('result-detect-geojson');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([SAMPLE_GEOJSON], {type:'application/json'}), 'test.geojson');
+    const r = await apiCall('POST', '/api/v1/detect', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 200 && r.data.format_name === 'GeoJSON' && r.data.confidence >= 0.5;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 格式: ${r.data.format_name} | 置信度: ${(r.data.confidence*100).toFixed(0)}% | 编码: ${r.data.encoding}\nCRS: ${r.data.crs_info || 'N/A'}\n字段: ${(r.data.attribute_schema||[]).map(f=>f.name).join(', ') || 'N/A'}`;
+    setStatus('detect-geojson', ok ? 'pass' : 'fail');
+    if (!ok) el.innerHTML += '\n<span class="r-fail">✗ 期望 GeoJSON + 置信度 ≥ 50%</span>';
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('detect-geojson', 'fail'); }
+}
+
+async function testDetectUnknown() {
+  const el = document.getElementById('result-detect-unknown');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([SAMPLE_UNKNOWN], {type:'text/plain'}), 'test.xyz');
+    const r = await apiCall('POST', '/api/v1/detect', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 200 && r.data.confidence < 0.5;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 格式: ${r.data.format_name} | 置信度: ${(r.data.confidence*100).toFixed(0)}%`;
+    setStatus('detect-unknown', ok ? 'pass' : 'fail');
+    if (!ok) el.innerHTML += '\n<span class="r-fail">✗ 期望置信度 < 50%</span>';
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('detect-unknown', 'fail'); }
+}
+
+async function testSubmitConversion() {
+  const el = document.getElementById('result-submit');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const dstCrs = document.getElementById('submitDstCrs').value || 'EPSG:4490';
+    const fmt = document.getElementById('submitFormat').value;
+    const fd = new FormData();
+    fd.append('file', new Blob([SAMPLE_GEOJSON], {type:'application/json'}), 'test.geojson');
+    fd.append('dst_crs', dstCrs);
+    fd.append('output_format', fmt);
+    const r = await apiCall('POST', '/api/v1/convert', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 202 && r.data.job_id;
+    el.innerHTML = `<span class="r-status">${r.status}</span> job_id: ${r.data.job_id}\n状态: ${r.data.status}\n消息: ${r.data.message}`;
+    setStatus('submit', ok ? 'pass' : 'fail');
+    if (ok) document.getElementById('jobDetailId').value = r.data.job_id;
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('submit', 'fail'); }
+}
+
+async function testListJobs() {
+  const el = document.getElementById('result-list-jobs');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/jobs');
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${r.data.length} 个任务\n` + (r.data.length ? r.data.slice(0,5).map(j => `  ${j.id.slice(0,8)}... ${j.original_filename} [${j.status}]`).join('\n') : '（空列表）');
+    setStatus('list-jobs', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('list-jobs', 'fail'); }
+}
+
+async function testJobDetail() {
+  const el = document.getElementById('result-job-detail');
+  const jobId = document.getElementById('jobDetailId').value.trim();
+  if (!jobId) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先输入 job_id</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', `/api/v1/jobs/${jobId}`);
+    const ok = r.status === 200;
+    el.innerHTML = `<span class="r-status">${r.status}</span> ${JSON.stringify(r.data, null, 2)}`;
+    setStatus('job-detail', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('job-detail', 'fail'); }
+}
+
+async function fetchLastJobId() {
+  try {
+    const r = await apiCall('GET', '/api/v1/jobs');
+    if (r.status === 200 && r.data.length > 0) {
+      document.getElementById('jobDetailId').value = r.data[0].id;
+      document.getElementById('result-job-detail').className = 'result-box show';
+      document.getElementById('result-job-detail').innerHTML = `<span class="r-info">已填入最新 job_id: ${r.data[0].id}</span>`;
+    }
+  } catch(e) { /* ignore */ }
+}
+
+async function testFormatList() {
+  const el = document.getElementById('result-list-formats');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/capabilities');
+    const formats = ['GeoJSON','SHP','KML','DXF','GPKG'];
+    const missing = formats.filter(f => !(r.data.input_formats||[]).includes(f));
+    const ok = r.status === 200 && missing.length === 0;
+    el.innerHTML = `<span class="r-status">${r.status}</span>\n输入格式: ${(r.data.input_formats||[]).join(', ')}\n输出格式: ${(r.data.output_formats||[]).join(', ')}\n坐标系: ${((r.data.supported_crs||[]).length)} 个`;
+    if (missing.length) el.innerHTML += `\n<span class="r-fail">缺少格式: ${missing.join(', ')}</span>`;
+    setStatus('list-formats', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('list-formats', 'fail'); }
+}
+
+async function testQualityComplete() {
+  const el = document.getElementById('result-quality-complete');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([SAMPLE_GEOJSON], {type:'application/json'}), 'test.geojson');
+    const r = await apiCall('POST', '/api/v1/quality/check/upload', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 200 && r.data.completeness_score > 0;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 完整性评分: <span class="${r.data.completeness_score >= 0.8 ? 'r-pass' : 'r-warn'}">${(r.data.completeness_score*100).toFixed(1)}%</span>\n格式: ${r.data.detected_format} | 要素: ${r.data.total_features} | 字段: ${r.data.total_fields}\n问题: ${(r.data.issues||[]).length} 项`;
+    setStatus('quality-complete', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('quality-complete', 'fail'); }
+}
+
+async function testQualityIncomplete() {
+  const el = document.getElementById('result-quality-incomplete');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([SAMPLE_INCOMPLETE], {type:'application/json'}), 'test_incomplete.geojson');
+    const r = await apiCall('POST', '/api/v1/quality/check/upload', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 200 && r.data.completeness_score < 1.0;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 完整性评分: <span class="${r.data.completeness_score >= 0.8 ? 'r-pass' : 'r-warn'}">${(r.data.completeness_score*100).toFixed(1)}%</span>\n关键字段状态:\n` + JSON.stringify(r.data.critical_fields_status, null, 2);
+    setStatus('quality-incomplete', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('quality-incomplete', 'fail'); }
+}
+
+async function testQualityList() {
+  const el = document.getElementById('result-quality-list');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/quality');
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${r.data.length} 个质量报告\n` + (r.data.length ? r.data.slice(0,5).map(q => `  ${q.file_name} | 评分: ${(q.completeness_score*100).toFixed(0)}% | ${q.detected_format}`).join('\n') : '（空列表）');
+    setStatus('quality-list', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('quality-list', 'fail'); }
+}
+
+function updateBatchFiles(input) {
+  _batchFiles = Array.from(input.files);
+  document.getElementById('batchPreview').textContent = _batchFiles.length ? `已选择 ${_batchFiles.length} 个文件` : '未选择文件';
+}
+
+async function testBatchSubmit() {
+  const el = document.getElementById('result-batch');
+  if (!_batchFiles.length) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先选择文件</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    _batchFiles.forEach(f => fd.append('files', f));
+    fd.append('dst_crs', document.getElementById('batchDstCrs').value || 'EPSG:4490');
+    fd.append('output_format', document.getElementById('batchFormat').value);
+    const r = await apiCall('POST', '/api/v1/batch/convert', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 202 && r.data.batch_job_id;
+    el.innerHTML = `<span class="r-status">${r.status}</span> batch_job_id: ${r.data.batch_job_id}\n文件数: ${r.data.file_count}\n消息: ${r.data.message}`;
+    setStatus('batch', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('batch', 'fail'); }
+}
+
+async function testBatchList() {
+  const el = document.getElementById('result-batch-list');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/batch');
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${r.data.length} 个批量任务\n` + (r.data.length ? r.data.slice(0,5).map(b => `  ${b.name} | ${b.status} | ${b.success_count}/${b.total_count}`).join('\n') : '（空列表）');
+    setStatus('batch-list', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('batch-list', 'fail'); }
+}
+
+async function testAdminCreateKey() {
+  const el = document.getElementById('result-admin-create');
+  const adminKey = document.getElementById('adminInitKey').value.trim();
+  if (!adminKey) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请填写 Admin Init Key</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const name = 'test_key_' + Date.now();
+    const r = await apiCall('POST', '/api/v1/admin/apikeys', { body: { name, description: 'test from testbench' }, headers: {'X-Admin-Init-Key': adminKey, 'Content-Type':'application/json'} });
+    const ok = r.status === 201 && r.data.api_key;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 名称: ${r.data.name}\napi_key: ${r.data.api_key}\n消息: ${r.data.message}`;
+    setStatus('admin-create', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('admin-create', 'fail'); }
+}
+
+async function testAdminListKeys() {
+  const el = document.getElementById('result-admin-list');
+  const adminKey = document.getElementById('adminInitKey').value.trim();
+  if (!adminKey) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请填写 Admin Init Key</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/admin/apikeys', { headers: {'X-Admin-Init-Key': adminKey} });
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${r.data.length} 个 Key\n` + r.data.map(k =>
+      `  <b>${k.name}</b>\n    ID: <code style="cursor:pointer;color:#58a6ff" onclick="fillRevokeId('${k.id}')">${k.id}</code> | ${k.is_active?'✅ 活跃':'❌ 禁用'} | ${(k.created_at||'').slice(0,10)}`
+    ).join('\n');
+    setStatus('admin-list', ok ? 'pass' : 'fail'); refreshAdminKeyList();
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('admin-list', 'fail'); }
+}
+
+function refreshAdminKeyList() {
+  const sel = document.getElementById('adminRevokeId');
+  const adminKey = document.getElementById('adminInitKey').value.trim();
+  if (!adminKey || !sel) return;
+  sel.innerHTML = '<option value="">请选择...</option>';
+  fetch(baseUrl() + '/api/v1/admin/apikeys', { headers: {'X-Admin-Init-Key': adminKey} })
+    .then(r => r.json()).then(d => {
+      if (Array.isArray(d)) d.forEach(k => {
+        const o = document.createElement('option'); o.value = k.id;
+        o.textContent = k.name + ' (' + k.id.slice(0,8) + '...)'; sel.appendChild(o);
+      });
+    }).catch(() => {});
+}
+
+function fillRevokeId(id) {
+  document.getElementById('adminRevokeId').value = id;
+  document.getElementById('result-admin-revoke').className = 'result-box';
+  document.getElementById('result-admin-revoke').innerHTML = `<span class="r-info">已填入 Key ID: ${id}</span>`;
+}
+async function testAdminRevokeKey() {
+  const el = document.getElementById('result-admin-revoke');
+  const keyId = document.getElementById('adminRevokeId').value.trim();
+  const adminKey = document.getElementById('adminInitKey').value.trim();
+  if (!keyId) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请选择要删除的 Key</span>'; return; }
+  if (!adminKey) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请填写 Admin Init Key</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('DELETE', `/api/v1/admin/apikeys/${keyId}`, { headers: {'X-Admin-Init-Key': adminKey} });
+    const ok = r.status === 204;
+    el.innerHTML = `<span class="r-status">${r.status}</span> Key ${keyId} 已${ok ? '成功' : '失败'}删除`;
+    setStatus('admin-revoke', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('admin-revoke', 'fail'); }
+}
+
+async function testUnauthorized() {
+  const el = document.getElementById('result-sec-unauth');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await fetch(baseUrl() + '/api/v1/jobs', { method: 'GET' });
+    const ok = r.status === 401;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 未授权访问返回 ${r.status}${ok ? ' ✓' : ' ✗'}`;
+    setStatus('sec-unauth', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('sec-unauth', 'fail'); }
+}
+
+async function testPathTraversal() {
+  const el = document.getElementById('result-sec-traversal');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob(['{}'], {type:'text/plain'}), '../../etc/passwd');
+    fd.append('dst_crs', 'EPSG:4490');
+    const r = await apiCall('POST', '/api/v1/convert', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 400;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 路径遍历文件返回 ${r.status}${ok ? ' ✓' : ' ✗ 期望 400'}`;
+    if (r.data && r.data.detail) el.innerHTML += `\n消息: ${r.data.detail}`;
+    setStatus('sec-traversal', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('sec-traversal', 'fail'); }
+}
+
+async function testExeRejection() {
+  const el = document.getElementById('result-sec-exe');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob(['MZ\x90\x00'], {type:'application/octet-stream'}), 'virus.exe');
+    fd.append('dst_crs', 'EPSG:4490');
+    const r = await apiCall('POST', '/api/v1/convert', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 400;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 可执行文件上传返回 ${r.status}${ok ? ' ✓' : ' ✗ 期望 400'}`;
+    if (r.data && r.data.detail) el.innerHTML += `\n消息: ${r.data.detail}`;
+    setStatus('sec-exe', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('sec-exe', 'fail'); }
+}
+
+// ── Custom Upload ────────────────────────────────────────────────────────────
+function updateCustomFile(input) {
+  _customFile = input.files[0];
+  document.getElementById('customPreview').textContent = _customFile ? `${_customFile.name} (${(_customFile.size/1024).toFixed(1)} KB)` : '未选择文件';
+}
+
+async function testCustomDetect() {
+  const el = document.getElementById('result-custom');
+  if (!_customFile) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先选择文件</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 检测中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', _customFile);
+    const r = await apiCall('POST', '/api/v1/detect', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    el.innerHTML = `<span class="r-status">${r.status}</span> 格式: ${r.data.format_name} | 置信度: ${(r.data.confidence*100).toFixed(0)}%\n编码: ${r.data.encoding} | CRS: ${r.data.crs_info || 'N/A'}\n字段: ${(r.data.attribute_schema||[]).map(f=>f.name).join(', ') || 'N/A'}`;
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; }
+}
+
+async function testCustomQuality() {
+  const el = document.getElementById('result-custom');
+  if (!_customFile) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先选择文件</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 质量检查中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', _customFile);
+    const r = await apiCall('POST', '/api/v1/quality/check', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    el.innerHTML = `<span class="r-status">${r.status}</span> 完整性评分: ${(r.data.completeness_score*100).toFixed(1)}%\n格式: ${r.data.detected_format} | 要素: ${r.data.total_features} | 字段: ${r.data.total_fields}\n问题: ${(r.data.issues||[]).length} 项\n关键字段: ` + JSON.stringify(r.data.critical_fields_status || {}, null, 2);
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; }
+}
+
+async function testCustomConvert() {
+  const el = document.getElementById('result-custom');
+  if (!_customFile) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先选择文件</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 提交转换中...';
+  try {
+    const fd = new FormData();
+    fd.append('file', _customFile);
+    fd.append('dst_crs', document.getElementById('customDstCrs').value || 'EPSG:4490');
+    fd.append('output_format', 'GeoJSON');
+    const r = await apiCall('POST', '/api/v1/convert', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    el.innerHTML = `<span class="r-status">${r.status}</span> job_id: ${r.data.job_id}\n状态: ${r.data.status}\n消息: ${r.data.message}`;
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; }
+}
+
+// ── Data API Tests ────────────────────────────────────────────
+let _dataTestFileId = null;
+
+async function testDataUpload() {
+  const el = document.getElementById('result-data-upload');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const content = JSON.stringify({"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[116,40]},"properties":{"name":"test"}}]});
+    const fd = new FormData();
+    fd.append('file', new Blob([content], {type:'application/json'}), 'data_test.geojson');
+    fd.append('description', 'Test upload from testbench');
+    const r = await apiCall('POST', '/api/v1/data/upload', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    const ok = r.status === 201 && r.data.id;
+    _dataTestFileId = r.data.id;
+    el.innerHTML = `<span class="r-status">${r.status}</span> id: ${r.data.id}\n文件名: ${r.data.original_name}\n大小: ${(r.data.file_size/1024).toFixed(1)} KB\n解压文件数: ${r.data.extracted_count}\n消息: ${r.data.message}`;
+    setStatus('data-upload', ok ? 'pass' : 'fail');
+    if (ok) {
+      el.innerHTML += '\n<span class="r-pass">✓ 文件已存入 PostgreSQL BYTEA</span>';
+    }
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('data-upload', 'fail'); }
+}
+
+async function testDataList() {
+  const el = document.getElementById('result-data-list');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/data');
+    // v2.4 起 /data 返回分页对象 {items,total,page,page_size}（兼容旧数组）
+    const items = (r.data && Array.isArray(r.data.items)) ? r.data.items : (Array.isArray(r.data) ? r.data : []);
+    const ok = r.status === 200 && (Array.isArray(r.data) || (r.data && Array.isArray(r.data.items)));
+    const total = (r.data && typeof r.data.total === 'number') ? r.data.total : items.length;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${total} 个文件\n` + (items.length ? items.slice(0,5).map(f =>
+      `  ${f.original_name} | ${(f.file_size/1024).toFixed(1)} KB | ${(f.created_at||'').slice(0,10)}`
+    ).join('\n') : '（空列表）');
+    setStatus('data-list', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('data-list', 'fail'); }
+}
+
+async function testDataDownload() {
+  const el = document.getElementById('result-data-download');
+  if (!_dataTestFileId) {
+    // Try to find a file
+    try {
+      const r = await apiCall('GET', '/api/v1/data');
+      if (r.data && r.data.length > 0) _dataTestFileId = r.data[0].id;
+    } catch(e) {}
+  }
+  if (!_dataTestFileId) {
+    el.className = 'result-box show';
+    el.innerHTML = '<span class="r-fail">没有可下载的文件。先运行"上传测试"</span>';
+    setStatus('data-download', 'warn');
+    return;
+  }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const resp = await fetch(baseUrl() + '/api/v1/data/' + _dataTestFileId + '/download', {
+      headers: {'X-API-Key': apiKey()}
+    });
+    const text = await resp.text();
+    const ok = resp.status === 200 && text.length > 0;
+    el.innerHTML = `<span class="r-status">${resp.status}</span> Content-Length: ${text.length} bytes\nContent-Type: ${resp.headers.get('Content-Type')}\nContent-Disposition: ${resp.headers.get('Content-Disposition')}\n\n文件内容预览 (前200字符):\n${text.slice(0, 200)}`;
+    if (resp.status === 410) {
+      // 服务端优化#5：上传文件仅做提取入库，不留存原始字节（file_data=None）
+      el.innerHTML += '\n\n<span class="r-warn">⚠ 原始文件数据已清理（服务端设计：仅入库不存字节），跳过下载验证</span>';
+      setStatus('data-download', 'warn');
+    } else {
+      setStatus('data-download', ok ? 'pass' : 'fail');
+    }
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('data-download', 'fail'); }
+}
+
+async function testDataSearch() {
+  const el = document.getElementById('result-data-search');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', '/api/v1/data?search=geojson');
+    const items = (r.data && Array.isArray(r.data.items)) ? r.data.items : (Array.isArray(r.data) ? r.data : []);
+    const ok = r.status === 200 && (Array.isArray(r.data) || (r.data && Array.isArray(r.data.items)));
+    el.innerHTML = `<span class="r-status">${r.status}</span> 搜索 "geojson": 找到 ${items.length} 个文件\n` + (items.length ? items.map(f =>
+      `  ${f.original_name} | ${(f.file_size/1024).toFixed(1)} KB`
+    ).join('\n') : '（无匹配）');
+    setStatus('data-search', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('data-search', 'fail'); }
+}
+
+async function testDataDelete() {
+  const el = document.getElementById('result-data-delete');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    // Upload a temp file then delete it
+    const fd = new FormData();
+    fd.append('file', new Blob(['delete test'], {type:'text/plain'}), 'delete_me.txt');
+    const up = await apiCall('POST', '/api/v1/data/upload', { body: fd, formData: true, headers: {'X-API-Key': apiKey()} });
+    if (up.status !== 201) throw new Error('Upload failed');
+    const fileId = up.data.id;
+    const r = await apiCall('DELETE', '/api/v1/data/' + fileId);
+    const ok = r.status === 204;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 上传临时文件 → 删除 → ${ok ? '✓ 成功' : '✗ 失败'}`;
+    setStatus('data-delete', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('data-delete', 'fail'); }
+}
+
+// ── S9 数据标准测试（层组多分类 + 移动/复制/删除规则 + 嵌套回滚）──────────────
+const S9 = { std_id:'', s2_id:'', a_id:'', a1_id:'', b_id:'', c_id:'', table_id:'', copy_id:'', lastLayerId:'' };
+function s9Name(prefix){ return (prefix||'s9') + '_' + Date.now().toString(36); }
+function s9v(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function s9SetVal(id, v){ const el = document.getElementById(id); if (el) el.value = v || ''; }
+function s9FillAll(){
+  s9SetVal('s9StdId', S9.std_id);
+  s9SetVal('s9LayerId', S9.a1_id || S9.lastLayerId);
+  s9SetVal('s9ListTablesLayerId', S9.b_id || S9.a_id);
+  s9SetVal('s9TableId', S9.table_id);
+  s9SetVal('s9AttachLayerId', S9.b_id);
+  s9SetVal('s9AttachTableId', S9.table_id);
+  s9SetVal('s9MoveLayerId', S9.a_id);
+  s9SetVal('s9MoveParentId', '');
+  s9SetVal('s9CopyLayerId', S9.a_id);
+  s9SetVal('s9DstStandardId', S9.s2_id);
+  s9SetVal('s9CopyName', '');
+  s9SetVal('s9DeleteLayerId', '');
+  s9SetVal('s9VerStdId', S9.std_id);
+  s9SetVal('s9Version', '1');
+  s9SetVal('s9DelStdId', '');
+}
+
+async function testS9Scenario() {
+  const el = document.getElementById('result-s9-scenario');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 场景执行中...';
+  const out = []; const okFlag = [];
+  const step = (name, cond, extra) => { okFlag.push(!!cond); out.push(`${cond?'✅':'❌'} ${name}${extra?' — '+extra:''}`); };
+  try {
+    const stdName = s9Name('s9_std');
+    // 1. 创建标准 STD
+    let r = await apiCall('POST', '/api/v1/data-standards-v2', { body: { name: stdName, code:'s9tb', category:'custom' } });
+    step('创建标准 STD', r.status === 201 && r.data.id, `status=${r.status}`);
+    if (r.status !== 201 || !r.data.id) throw new Error('创建标准失败');
+    S9.std_id = r.data.id;
+    // 2. 创建层组 A / 子层组 A1 / 层组 B
+    r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.std_id}/layers`, { body: { group_name:'A', group_code:'A' } });
+    step('创建层组 A', r.status === 201 && r.data.id); if (r.status !== 201) throw new Error('创建层组 A 失败');
+    S9.a_id = r.data.id;
+    r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.std_id}/layers`, { body: { group_name:'A1', group_code:'A1', parent_id: S9.a_id } });
+    step('创建子层组 A1', r.status === 201 && r.data.id); if (r.status !== 201) throw new Error('创建层组 A1 失败');
+    S9.a1_id = r.data.id;
+    r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.std_id}/layers`, { body: { group_name:'B', group_code:'B' } });
+    step('创建层组 B', r.status === 201 && r.data.id); if (r.status !== 201) throw new Error('创建层组 B 失败');
+    S9.b_id = r.data.id;
+    // 3. 创建表 T1（主归属自动注入）
+    r = await apiCall('POST', `/api/v1/layers/${S9.a1_id}/tables`, { body: { table_name:'T1', table_code:'T1', geometry_type:'Point', fields:[{ field_name:'fid', data_type:'integer', is_primary_key:true }] } });
+    step('创建表 T1（自动主归属）', r.status === 201 && r.data.id); if (r.status !== 201) throw new Error('创建表失败');
+    S9.table_id = r.data.id;
+    // 4. 主归属自动注入验证
+    r = await apiCall('GET', `/api/v1/layers/${S9.a1_id}/tables`);
+    step('主归属自动注入 is_primary=true', r.status === 200 && Array.isArray(r.data) && r.data.some(t => t.id === S9.table_id && t.is_primary === true));
+    r = await apiCall('GET', `/api/v1/tables/${S9.table_id}/layers`);
+    step('表归属列表 = 1 条主归属', r.status === 200 && r.data.length === 1 && r.data[0].is_primary === true);
+    // 5. 次归属挂载到 B
+    r = await apiCall('POST', `/api/v1/layers/${S9.b_id}/tables/${S9.table_id}/attach`, { body: { is_primary:false } });
+    step('次归属挂载到 B', r.status === 201 && r.data.is_primary === false);
+    // 6. B5 删除守卫：T1 主归属在 A1、次归属被子树外 B 引用 → 删 A1 400
+    r = await apiCall('DELETE', `/api/v1/layers/${S9.a1_id}`);
+    step('B5 守卫：删 A1 → 400', r.status === 400, `status=${r.status} ${r.data&&r.data.detail?r.data.detail:''}`);
+    // 7. 主归属转移 A1 → A（layer_id 同步）
+    r = await apiCall('POST', `/api/v1/layers/${S9.a_id}/tables/${S9.table_id}/attach`, { body: { is_primary:true } });
+    step('主归属转移到 A', r.status === 201 && r.data.is_primary === true);
+    // 8. 摘挂 B 次归属
+    r = await apiCall('DELETE', `/api/v1/layers/${S9.b_id}/tables/${S9.table_id}/attach`);
+    step('摘挂 B 次归属', r.status === 204);
+    r = await apiCall('GET', `/api/v1/tables/${S9.table_id}/layers`);
+    step('摘挂后归属 = A 主 + A1 次（主在前）', r.status === 200 && r.data.length === 2 && r.data[0].is_primary === true && r.data[0].layer_group.id === S9.a_id);
+    // 9. B2 防环：A 移到自身子孙 A1 → 400
+    r = await apiCall('POST', `/api/v1/layers/${S9.a_id}/move`, { body: { new_parent_id: S9.a1_id } });
+    step('B2 防环：A→A1 → 400', r.status === 400);
+    // 10. 创建 STD2 + 层组 C；B3 跨标准移动 → 400
+    r = await apiCall('POST', '/api/v1/data-standards-v2', { body: { name: stdName + '_2', code:'s9tb2', category:'custom' } });
+    step('创建标准 STD2', r.status === 201 && r.data.id); if (r.status !== 201) throw new Error('创建 STD2 失败');
+    S9.s2_id = r.data.id;
+    r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.s2_id}/layers`, { body: { group_name:'C', group_code:'C' } });
+    step('创建层组 C（STD2）', r.status === 201 && r.data.id); if (r.status !== 201) throw new Error('创建层组 C 失败');
+    S9.c_id = r.data.id;
+    r = await apiCall('POST', `/api/v1/layers/${S9.a_id}/move`, { body: { new_parent_id: S9.c_id } });
+    step('B3 跨标准移动 A→C → 400', r.status === 400);
+    // 11. B1 跨标准复制 A → STD2
+    r = await apiCall('POST', `/api/v1/layers/${S9.a_id}/copy`, { body: { new_standard_id: S9.s2_id, new_name:'A副本' } });
+    step('B1 跨标准复制 A→STD2', r.status === 201 && r.data.id && r.data.standard_id === S9.s2_id, `status=${r.status}`);
+    if (r.status === 201 && r.data.id) S9.copy_id = r.data.id;
+    // 12. 发布 ×2 + 版本列表
+    let ver1 = null;
+    r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.std_id}/publish`, { body: { change_log:'S9 场景 v1' } });
+    step('发布 v1', r.status === 201 && typeof r.data.version_number === 'number');
+    if (r.status === 201 && typeof r.data.version_number === 'number') ver1 = r.data.version_number;
+    r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.std_id}/publish`, { body: { change_log:'S9 场景 v2' } });
+    step('发布 v2', r.status === 201);
+    r = await apiCall('GET', `/api/v1/data-standards-v2/${S9.std_id}/versions`);
+    step('版本列表 ≥ 2', r.status === 200 && Array.isArray(r.data) && r.data.length >= 2);
+    // 13. 嵌套树回滚（S9 真实 bug 回归：修复前 500）
+    if (ver1 !== null) {
+      r = await apiCall('POST', `/api/v1/data-standards-v2/${S9.std_id}/rollback/${ver1}`);
+      step(`嵌套树回滚到 v${ver1} → 201`, r.status === 201, `status=${r.status}`);
+    } else {
+      step('嵌套树回滚（跳过：未取得版本号）', false);
+    }
+    // 14. 清理
+    if (S9.s2_id) { r = await apiCall('DELETE', `/api/v1/data-standards-v2/${S9.s2_id}`); step('清理 STD2', r.status === 204); }
+    if (S9.std_id) { r = await apiCall('DELETE', `/api/v1/data-standards-v2/${S9.std_id}`); step('清理 STD', r.status === 204); }
+
+    const pass = okFlag.filter(Boolean).length;
+    const fail = okFlag.length - pass;
+    el.innerHTML = out.join('\n') + `\n\n══ 结果: ${pass} 通过 / ${fail} 失败`;
+    setStatus('s9-scenario', fail === 0 ? 'pass' : 'fail');
+    if (fail === 0) s9FillAll();
+  } catch(e) {
+    el.innerHTML = out.join('\n') + `\n<span class="r-fail">中断: ${e.message}</span>`;
+    setStatus('s9-scenario', 'fail');
+  }
+}
+
+async function testS9CreateStd() {
+  const el = document.getElementById('result-s9-create-std');
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const name = s9v('s9StdName') || s9Name('s9_std');
+    const r = await apiCall('POST', '/api/v1/data-standards-v2', { body: { name, category:'custom' } });
+    const ok = r.status === 201 && r.data.id;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 标准 ID: ${r.data.id||'-'}\n名称: ${r.data.name||''}\n版本: ${r.data.version ?? '-'}`;
+    if (ok) { S9.std_id = r.data.id; s9SetVal('s9StdId', S9.std_id); }
+    setStatus('s9-create-std', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-create-std', 'fail'); }
+}
+
+async function testS9CreateLayer() {
+  const el = document.getElementById('result-s9-create-layer');
+  const stdId = s9v('s9StdId');
+  if (!stdId) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填标准 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const body = { group_name: s9v('s9LayerName') || '新层组', group_code: s9v('s9LayerName') || '' };
+    const parent = s9v('s9LayerParentId');
+    if (parent) body.parent_id = parent;
+    const r = await apiCall('POST', `/api/v1/data-standards-v2/${stdId}/layers`, { body });
+    const ok = r.status === 201 && r.data.id;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 层组 ID: ${r.data.id||'-'}\n名称: ${r.data.group_name||''}\n父层组: ${r.data.parent_id || '（顶层）'}`;
+    if (ok) { S9.lastLayerId = r.data.id; s9SetVal('s9LayerId', S9.lastLayerId); }
+    setStatus('s9-create-layer', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-create-layer', 'fail'); }
+}
+
+async function testS9CreateTable() {
+  const el = document.getElementById('result-s9-create-table');
+  const lid = s9v('s9LayerId');
+  if (!lid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填层组 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const name = s9v('s9TableName') || '新数据表';
+    const r = await apiCall('POST', `/api/v1/layers/${lid}/tables`, { body: { table_name: name, table_code: name, geometry_type:'Point' } });
+    const ok = r.status === 201 && r.data.id;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 表 ID: ${r.data.id||'-'}\n表名: ${r.data.table_name||''}\n主归属层组: ${r.data.layer_id||''}`;
+    if (ok) { S9.table_id = r.data.id; s9SetVal('s9TableId', S9.table_id); }
+    setStatus('s9-create-table', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-create-table', 'fail'); }
+}
+
+async function testS9ListTables() {
+  const el = document.getElementById('result-s9-list-tables');
+  const lid = s9v('s9ListTablesLayerId');
+  if (!lid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填层组 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', `/api/v1/layers/${lid}/tables`);
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${Array.isArray(r.data)?r.data.length:0} 张表\n` + (Array.isArray(r.data) ? r.data.map(t => `  ${t.is_primary?'✅ 主':'🔗 次'} ${t.table_name} | ${t.table_code||''} | 字段:${t.field_count} | ${t.id}`).join('\n') : '');
+    setStatus('s9-list-tables', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-list-tables', 'fail'); }
+}
+
+async function testS9TableLayers() {
+  const el = document.getElementById('result-s9-table-layers');
+  const tid = s9v('s9TableId');
+  if (!tid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填表 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', `/api/v1/tables/${tid}/layers`);
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${Array.isArray(r.data)?r.data.length:0} 个归属\n` + (Array.isArray(r.data) ? r.data.map(l => `  ${l.is_primary?'✅ 主':'🔗 次'} ${l.layer_group.group_name} (${l.layer_group.group_code||''}) | ${l.layer_group.id}`).join('\n') : '');
+    setStatus('s9-table-layers', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-table-layers', 'fail'); }
+}
+
+async function testS9Attach(mode) {
+  const el = document.getElementById('result-s9-attach');
+  const lid = s9v('s9AttachLayerId'); const tid = s9v('s9AttachTableId');
+  if (!lid || !tid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请填层组 ID 和表 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    let r, ok;
+    if (mode === 'detach') {
+      r = await apiCall('DELETE', `/api/v1/layers/${lid}/tables/${tid}/attach`);
+      ok = r.status === 204;
+      el.innerHTML = `<span class="r-status">${r.status}</span> 摘挂${ok?'成功':'失败'}`;
+    } else {
+      const isPrimary = mode === 'primary';
+      r = await apiCall('POST', `/api/v1/layers/${lid}/tables/${tid}/attach`, { body: { is_primary: isPrimary } });
+      ok = r.status === 201;
+      el.innerHTML = `<span class="r-status">${r.status}</span> ${isPrimary?'设为主归属':'挂载次归属'}: ${r.data && r.data.layer_group ? r.data.layer_group.group_name : ''}\n结果: ${JSON.stringify(r.data, null, 2)}`;
+    }
+    if (!ok && r.data && r.data.detail) el.innerHTML += `\n<span class="r-warn">detail: ${r.data.detail}</span>`;
+    setStatus('s9-attach', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-attach', 'fail'); }
+}
+
+async function testS9Move() {
+  const el = document.getElementById('result-s9-move');
+  const lid = s9v('s9MoveLayerId');
+  if (!lid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填被移动层组 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const body = { new_parent_id: s9v('s9MoveParentId') || null };
+    const r = await apiCall('POST', `/api/v1/layers/${lid}/move`, { body });
+    const ok = r.status === 200 || r.status === 400;
+    el.innerHTML = `<span class="r-status">${r.status}</span>\n` + (r.data ? JSON.stringify(r.data, null, 2) : '');
+    if (r.status === 200) el.innerHTML += '\n<span class="r-pass">✓ 移动成功</span>';
+    if (r.status === 400) el.innerHTML += '\n<span class="r-warn">⚠ 被拦截（B2 防环 / B3 跨标准 / 深度超限）</span>';
+    setStatus('s9-move', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-move', 'fail'); }
+}
+
+async function testS9Copy() {
+  const el = document.getElementById('result-s9-copy');
+  const lid = s9v('s9CopyLayerId');
+  if (!lid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填被复制层组 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const body = {};
+    const dst = s9v('s9DstStandardId'); if (dst) body.new_standard_id = dst;
+    const nm = s9v('s9CopyName'); if (nm) body.new_name = nm;
+    const r = await apiCall('POST', `/api/v1/layers/${lid}/copy`, { body });
+    const ok = r.status === 201 && r.data.id;
+    el.innerHTML = `<span class="r-status">${r.status}</span>\n新层组 ID: ${r.data.id||'-'}\n所属标准: ${r.data.standard_id||'-'}${dst ? `\n目标标准: ${dst}` : ''}`;
+    if (dst && ok) el.innerHTML += (r.data.standard_id === dst ? '\n<span class="r-pass">✓ 已复制到目标标准</span>' : '\n<span class="r-fail">✗ 所属标准 ≠ 目标标准</span>');
+    setStatus('s9-copy', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-copy', 'fail'); }
+}
+
+async function testS9DeleteLayer() {
+  const el = document.getElementById('result-s9-delete-layer');
+  const lid = s9v('s9DeleteLayerId');
+  if (!lid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填层组 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('DELETE', `/api/v1/layers/${lid}`);
+    const ok = r.status === 204 || r.status === 400;
+    el.innerHTML = `<span class="r-status">${r.status}</span>\n` + (r.data && r.data.detail ? r.data.detail : (r.status === 204 ? '删除成功（主层组级联删表 / 次归属层组仅摘挂）' : ''));
+    if (r.status === 400) el.innerHTML += '\n<span class="r-warn">⚠ B5 守卫拦截（有共享引用，请先摘挂）</span>';
+    setStatus('s9-delete-layer', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-delete-layer', 'fail'); }
+}
+
+async function testS9Publish() {
+  const el = document.getElementById('result-s9-version');
+  const sid = s9v('s9VerStdId');
+  if (!sid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填标准 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('POST', `/api/v1/data-standards-v2/${sid}/publish`, { body: { change_log: s9v('s9ChangeLog') || 'testbench 发布' } });
+    const ok = r.status === 201;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 版本: ${r.data.version_number ?? '-'} (${r.data.version_label||''})\n变更说明: ${r.data.change_log||''}`;
+    setStatus('s9-version', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-version', 'fail'); }
+}
+
+async function testS9Versions() {
+  const el = document.getElementById('result-s9-version');
+  const sid = s9v('s9VerStdId');
+  if (!sid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填标准 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('GET', `/api/v1/data-standards-v2/${sid}/versions`);
+    const ok = r.status === 200 && Array.isArray(r.data);
+    el.innerHTML = `<span class="r-status">${r.status}</span> 共 ${Array.isArray(r.data)?r.data.length:0} 个版本\n` + (Array.isArray(r.data) ? r.data.map(v => `  v${v.version_number} ${v.version_label||''} ${v.is_rollback?'↩ 回滚生成':''} | ${(v.created_at||'').slice(0,19)}`).join('\n') : '');
+    setStatus('s9-version', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-version', 'fail'); }
+}
+
+async function testS9Rollback() {
+  const el = document.getElementById('result-s9-version');
+  const sid = s9v('s9VerStdId'); const ver = s9v('s9Version') || '1';
+  if (!sid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填标准 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('POST', `/api/v1/data-standards-v2/${sid}/rollback/${ver}`);
+    const ok = r.status === 201;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 回滚到 v${ver}${ok?'成功':'失败'}` + (r.data && r.data.detail ? `\n${r.data.detail}` : '');
+    if (ok) el.innerHTML += '\n<span class="r-pass">✓ 嵌套树回滚正常（S9 bug 已修复）</span>';
+    setStatus('s9-version', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-version', 'fail'); }
+}
+
+async function testS9DeleteStd() {
+  const el = document.getElementById('result-s9-delete-std');
+  const sid = s9v('s9DelStdId');
+  if (!sid) { el.className = 'result-box show'; el.innerHTML = '<span class="r-fail">请先填标准 ID</span>'; return; }
+  el.className = 'result-box show'; el.innerHTML = '<span class="spinner"></span> 测试中...';
+  try {
+    const r = await apiCall('DELETE', `/api/v1/data-standards-v2/${sid}`);
+    const ok = r.status === 204;
+    el.innerHTML = `<span class="r-status">${r.status}</span> 标准 ${sid} 已${ok?'成功':'失败'}删除（级联删除层组/表/字段/版本）`;
+    setStatus('s9-delete-std', ok ? 'pass' : 'fail');
+  } catch(e) { el.innerHTML = `<span class="r-fail">${e.message}</span>`; setStatus('s9-delete-std', 'fail'); }
+}
+
+// ── Run All ──────────────────────────────────────────────────────────────────
+async function runAllTests() {
+  resetAll();
+  const tests = [
+    testHealth, testCapabilities,
+    testDetectGeoJSON, testDetectUnknown,
+    testSubmitConversion, testListJobs, testFormatList,
+    testQualityComplete, testQualityIncomplete, testQualityList,
+    testBatchList,
+    testUnauthorized, testPathTraversal, testExeRejection,
+    testDataUpload, testDataList, testDataDownload, testDataSearch, testDataDelete, testS9Scenario,
+  ];
+  for (const t of tests) {
+    await t();
+    await new Promise(r => setTimeout(r, 200));
+  }
+  document.querySelectorAll('.test-card').forEach(c => c.classList.add('open'));
+}
+async function runPassTests() {
+  resetAll();
+  const tests = [
+    testHealth, testCapabilities,
+    testDetectGeoJSON, testDetectUnknown,
+    testSubmitConversion, testListJobs, testFormatList,
+    testQualityComplete, testQualityIncomplete, testQualityList,
+    testBatchList,
+    testAdminCreateKey, testAdminListKeys,
+    testUnauthorized, testPathTraversal, testExeRejection,
+    testDataUpload, testDataList, testDataDownload, testDataSearch, testDataDelete, testS9Scenario,
+  ];
+  for (const t of tests) {
+    await t();
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+</script>
+</body>
+</html>

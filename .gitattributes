@@ -1,0 +1,4 @@
+# 确保脚本 LF 行尾（避免 Windows CRLF 进入镜像导致 bad interpreter）
+*.sh text eol=lf
+Makefile text eol=lf
+docker/** text eol=lf

@@ -1,0 +1,23 @@
+# Review package: 93b41c1..2271705
+
+## Commits
+2271705 deps: add pyodbc for MDB support
+
+## Files changed
+ requirements.txt | 57 ++++++++++++++++++++++
+ 1 file changed, 57 insertions(+)
+
+## Diff
+diff --git a/requirements.txt b/requirements.txt
+index 1234567..89abcdef 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -54,3 +54,6 @@ pytest>=8.0.0
+ pytest-asyncio>=0.24.0
+ 
+ # Testing
+ pytest>=8.0.0
+ pytest-asyncio>=0.24.0
++
++# MDB support
++pyodbc>=5.1.0

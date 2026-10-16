@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv\\\\Scripts\\\\python -m pytest tests/test_api.py -v --tb=short -p no:cacheprovider)",
+      "Bash(./.venv/Scripts/python -m pytest tests/test_api.py -v --tb=short -p no:cacheprovider)",
+      "Bash(./.venv/Scripts/python -m pip install pytest pytest-asyncio httpx aiosqlite)",
+      "Bash(python -c \"from app.config import settings; print\\('admin_init_key:', repr\\(settings.admin_init_key\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(winget search *)",
+      "Bash(powershell -Command \"Get-Command winget -ErrorAction SilentlyContinue; Write-Output '---'; choco --version 2>&1; Write-Output '---'; scoop --version 2>&1\")",
+      "Bash(curl --version)",
+      "Bash(curl -L -o /dev/null -s -w \"%{http_code}\" \"https://get.enterprisedb.com/postgresql/postgresql-16.4-1-windows-x64.exe\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\Administrator\\\\Desktop\\\\AI项目\\\\空间API服务\\\\scripts\\\\install_postgres.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\Administrator\\\\Desktop\\\\AI项目\\\\空间API服务\\\\scripts\\\\install_pg.ps1\")"
+    ]
+  }
+}

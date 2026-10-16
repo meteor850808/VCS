@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# Database
+*.db
+*.sqlite3
+
+# Runtime data
+data/uploads/
+data/outputs/
+dump.rdb
+
+# Docker（仅排除上下文根，避免误伤 docker/nginx/Dockerfile）
+/Dockerfile
+/docker-compose.yml
+/docker-compose.prod.yml
+/.dockerignore
+/Makefile
+
+# Docs & plans
+*.md
+!README.md
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Tests
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Offline deploy & docs & vendored tools（构建不需要）
+deploy/
+offline/
+docs/
+tools/
+Redis8/
+secrets/
+certs/
+*.log

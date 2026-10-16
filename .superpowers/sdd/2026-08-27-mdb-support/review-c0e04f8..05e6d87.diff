@@ -1,0 +1,41 @@
+# Review package: c0e04f8..05e6d87
+
+## Commits
+c0e04f8 feat: add MDB processor core extraction logic
+eff8cbe fix: address Task 2 review findings - test coverage and error handling
+ccb638c feat: classify MDB as spatial format instead of table
+b05567f fix(mdb): use api_key.owner_id instead of api_key.id for FK compliance
+7c8281f feat: add MDB upload support to data endpoint
+c015e4c fix(mdb): improve test quality and document api_key.owner_id usage
+ebc798b test: add MDB integration test framework and test data documentation
+05e6d87 docs: update documentation for MDB support (v2.12.0)
+
+## Files changed (18 files, +7045/-7)
+BASELINE.md, CONTEXT.md, README.md, app/api/v1/data.py, app/main.py,
+app/services/format_detection.py, app/services/mdb_processor.py,
+deploy_linux.sh, deploy_windows.bat, docs/revision_history.md, pytest.ini,
+restart.bat, tests/fixtures/mdb/README.md, tests/integration/__init__.py,
+tests/integration/test_mdb_integration.py, tests/test_format_detection_mdb.py,
+tests/test_mdb_processor.py, tests/test_upload_mdb.py
+
+## Key Changes
+
+### Core Implementation
+- `app/services/mdb_processor.py` — NEW: MDB processor with `extract_mdb_features()` and `extract_mdb_to_stored_files()`
+- `app/services/format_detection.py` — MDB moved from TABLE_FORMATS to GEOMETRY_FORMATS; magic bytes detection added
+- `app/api/v1/data.py` — MDB upload branch added, uses `api_key.owner_id` for FK compliance
+
+### Tests
+- `tests/test_mdb_processor.py` — 11 tests covering core MDB processing
+- `tests/test_format_detection_mdb.py` — 7 tests for MDB format detection
+- `tests/test_upload_mdb.py` — 1 test for upload endpoint
+- `tests/integration/test_mdb_integration.py` — 27 tests (24 pass, 3 skip pending MDB fixtures)
+
+### Documentation
+- `BASELINE.md` — Updated to v2.12.0, added MDB support section
+- `README.md` — Added MDB to supported formats table
+- `docs/revision_history.md` — v2.12.0 entry with all changes
+
+## Test Results
+- 43/43 passing, 3 skipped (integration tests needing MDB fixtures)
+- 4 pre-existing failures in test_api.py (PostgreSQL event loop, not MDB-related)

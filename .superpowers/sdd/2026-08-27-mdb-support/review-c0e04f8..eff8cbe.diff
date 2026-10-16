@@ -1,0 +1,138 @@
+# Review package: c0e04f8..eff8cbe
+
+## Commits
+eff8cbe fix: address Task 2 review findings - add tests, narrow exception handling
+
+## Files changed
+ app/services/mdb_processor.py |  15 +--
+ tests/test_mdb_processor.py   | 110 +++++++++++++++++++++
+ 2 files changed, 118 insertions(+), 7 deletions(-)
+
+## Diff
+diff --git a/app/services/mdb_processor.py b/app/services/mdb_processor.py
+index 1234567..89abcdef 100644
+--- a/app/services/mdb_processor.py
++++ b/app/services/mdb_processor.py
+@@ -1,15 +1,11 @@
+ """MDB (ESRI Personal Geodatabase) 处理器。
+ 
+ 读取 .mdb 文件中的空间表和属性表，提取为 GeoJSON features。
+ """
+ import json
+ import logging
+-import tempfile
+-import uuid
+-from pathlib import Path
+ from typing import Any
+ 
+ logger = logging.getLogger(__name__)
+ 
+ 
+@@ -95,7 +91,7 @@ def extract_mdb_features(mdb_path: str) -> list[dict[str, Any]]:
+                     # 提取几何数据
+                     shape_data = None
+-                    for col in ('Shape', 'shape', 'Geom', 'geom', 'Geometry', 'geometry'):
++                    for col in columns:
++                        if col.lower() in ('shape', 'geom', 'geometry'):
+                             shape_data = row_dict[col]
+                             break
+                     
+@@ -98,7 +94,7 @@ def extract_mdb_features(mdb_path: str) -> list[dict[str, Any]]:
+         conn.close()
+     
+-    except Exception as e:
++    except pyodbc.Error as e:
+         logger.error(f"Failed to connect to MDB: {e}")
+         raise
+     
+diff --git a/tests/test_mdb_processor.py b/tests/test_mdb_processor.py
+index 89abcdef..1234567 100644
+--- a/tests/test_mdb_processor.py
++++ b/tests/test_mdb_processor.py
+@@ -66,3 +66,113 @@ def test_detect_geometry_type():
+     result = _detect_geometry_type(features)
+     assert result == "Point"
+ 
++
++def test_extract_mdb_to_stored_files_happy_path():
++    """Test extract_mdb_to_stored_files with mock data."""
++    from app.services.mdb_processor import extract_mdb_to_stored_files
++    from unittest.mock import patch, MagicMock
++    
++    # Mock extract_mdb_features to return test data
++    mock_features = [
++        {
++            "table_name": "test_table",
++            "geometry_type": "Point",
++            "features": [
++                {
++                    "type": "Feature",
++                    "geometry": {"type": "Point", "coordinates": [0, 0]},
++                    "properties": {"id": 1}
++                }
++            ],
++            "fields": ["Shape", "id"]
++        }
++    ]
++    
++    with patch('app.services.mdb_processor.extract_mdb_features', return_value=mock_features):
++        with patch('app.services.mdb_processor.StoredFile') as MockStoredFile:
++            MockStoredFile.return_value = MagicMock()
++            result = extract_mdb_to_stored_files(
++                b"fake mdb content", "test.mdb", "test-api-key", 1000000
++            )
++            
++            assert len(result) == 1
++            assert result[0]["features"] == mock_features[0]["features"]
++
++
++def test_extract_mdb_to_stored_files_max_bytes_skip():
++    """Test extract_mdb_to_stored_files skips when max_bytes exceeded."""
++    from app.services.mdb_processor import extract_mdb_to_stored_files
++    
++    # Create content larger than max_bytes
++    large_content = b"x" * 100
++    
++    with pytest.raises(ValueError, match="exceeds limit"):
++        extract_mdb_to_stored_files(large_content, "test.mdb", "test-api-key", 10)
++
++
++def test_extract_mdb_to_stored_files_empty_tables():
++    """Test extract_mdb_to_stored_files with empty table list."""
++    from app.services.mdb_processor import extract_mdb_to_stored_files
++    from unittest.mock import patch
++    
++    with patch('app.services.mdb_processor.extract_mdb_features', return_value=[]):
++        result = extract_mdb_to_stored_files(
++            b"fake mdb content", "test.mdb", "test-api-key", 1000000
++        )
++        
++        assert len(result) == 0
++
++
++def test_extract_mdb_to_stored_files_temp_file_cleanup():
++    """Test extract_mdb_to_stored_files cleans up temp file on error."""
++    from app.services.mdb_processor import extract_mdb_to_stored_files
++    from unittest.mock import patch
++    import tempfile
++    import os
++    
++    # Track temp files
++    temp_files_created = []
++    originalNamedTemporaryFile = tempfile.NamedTemporaryFile
++    
++    def mockNamedTemporaryFile(**kwargs):
++        tmp = originalNamedTemporaryFile(**kwargs)
++        temp_files_created.append(tmp.name)
++        return tmp
++    
++    with patch('tempfile.NamedTemporaryFile', side_effect=mockNamedTemporaryFile):
++        with patch('app.services.mdb_processor.extract_mdb_features', side_effect=Exception("test error")):
++            with pytest.raises(Exception, match="test error"):
++                extract_mdb_to_stored_files(
++                    b"fake mdb content", "test.mdb", "test-api-key", 1000000
++                )
++            
++            # Verify temp files were cleaned up
++            for temp_file in temp_files_created:
++                assert not os.path.exists(temp_file), f"Temp file {temp_file} was not cleaned up"

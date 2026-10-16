@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GIS 数据质检工具</title>
+    <style>
+        /* ===== 全局重置 & 基础 ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+        }
+
+        body {
+            background: #0d0d1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* ===== 主容器 ===== */
+        .app-container {
+            width: 1400px;
+            max-width: 98vw;
+            height: 900px;
+            max-height: 96vh;
+            background: #161625;
+            border-radius: 14px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #2a2a45;
+        }
+
+        /* ===== 顶部栏 ===== */
+        .top-bar {
+            background: #1a1a30;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #2a2a4a;
+            flex-shrink: 0;
+            min-height: 52px;
+        }
+
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .top-bar-left .app-icon {
+            color: #5b8def;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .top-bar-left .app-icon::before {
+            content: "⬡";
+            font-size: 26px;
+            color: #5b8def;
+        }
+
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #b0b0d0;
+            font-size: 13px;
+            font-weight: 500;
+            user-select: none;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 38px;
+            height: 20px;
+            background: #2d2d50;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.25s;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch.active {
+            background: #3a7bd5;
+        }
+
+        .toggle-switch .knob {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: #c0c0e0;
+            border-radius: 50%;
+            transition: transform 0.25s, background 0.25s;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .toggle-switch.active .knob {
+            transform: translateX(18px);
+            background: #fff;
+        }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            color: #8888aa;
+            font-size: 13px;
+        }
+
+        .top-bar-right .badge {
+            background: #2a2a4a;
+            padding: 4px 14px;
+            border-radius: 20px;
+            color: #b0b0d0;
+            font-size: 12px;
+            border: 1px solid #3a3a5a;
+        }
+
+        .top-bar-right .user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .top-bar-right .user .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #2a3a6a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8aacff;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* ===== 主体 ===== */
+        .main-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ===== 左侧面板 ===== */
+        .left-panel {
+            width: 30%;
+            min-width: 280px;
+            background: #12121f;
+            border-right: 1px solid #22223e;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .left-panel .panel-header {
+            padding: 12px 16px 10px 16px;
+            border-bottom: 1px solid #1e1e38;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .left-panel .panel-header .title {
+            color: #c0c0e0;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .left-panel .panel-header .title .count {
+            background: #1e1e3a;
+            padding: 0 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #7a7aaa;
+            font-weight: 400;
+        }
+
+        .left-panel .panel-header .search-icon {
+            color: #555577;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .left-panel .layer-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 6px 0;
+        }
+
+        .left-panel .layer-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .left-panel .layer-list::-webkit-scrollbar-track {
+            background: #0d0d1a;
+        }
+
+        .left-panel .layer-list::-webkit-scrollbar-thumb {
+            background: #2a2a5a;
+            border-radius: 4px;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 16px 6px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-left: 3px solid transparent;
+            gap: 10px;
+            position: relative;
+        }
+
+        .layer-item:hover {
+            background: #1a1a32;
+        }
+
+        .layer-item.active {
+            background: #1a2a4a;
+            border-left-color: #4a8af4;
+        }
+
+        .layer-item .checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid #4a4a6a;
+            border-radius: 3px;
+            flex-shrink: 0;
+            background: transparent;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: transparent;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .layer-item .checkbox.checked {
+            background: #3a7bd5;
+            border-color: #3a7bd5;
+            color: #fff;
+        }
+
+        .layer-item .layer-name {
+            color: #c8c8e8;
+            font-size: 13px;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .layer-item .layer-name .sub {
+            color: #6a6a8a;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        .layer-item .layer-tag {
+            font-size: 10px;
+            color: #4a6a9a;
+            background: #1a2a3a;
+            padding: 0 8px;
+            border-radius: 10px;
+            border: 1px solid #2a3a5a;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .layer-item.active .layer-name {
+            color: #e8e8ff;
+        }
+
+        .layer-item.active .layer-tag {
+            color: #6a9aff;
+            border-color: #3a6aaa;
+        }
+
+        /* 选中的图层详情 */
+        .layer-detail {
+            padding: 10px 16px 12px 16px;
+            background: #0e0e1e;
+            border-top: 1px solid #1a1a34;
+            flex-shrink: 0;
+        }
+
+        .layer-detail .detail-label {
+            color: #6a6a8a;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .layer-detail .detail-path {
+            color: #9a9ac0;
+            font-size: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        .layer-detail .detail-path .highlight {
+            color: #6a9aff;
+        }
+
+        /* ===== 右侧面板 ===== */
+        .right-panel {
+            flex: 1;
+            background: #141425;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .right-panel .right-header {
+            padding: 10px 20px;
+            background: #111125;
+            border-bottom: 1px solid #1e1e3a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .right-panel .right-header .sel-info {
+            color: #b0b0d0;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .right-panel .right-header .sel-info .label {
+            color: #6a6a8a;
+        }
+
+        .right-panel .right-header .sel-info .name {
+            color: #e0e0ff;
+            font-weight: 500;
+        }
+
+        .right-panel .right-header .sel-info .code {
+            color: #6a8ac0;
+            font-family: monospace;
+            font-size: 12px;
+            background: #1a1a34;
+            padding: 0 10px;
+            border-radius: 10px;
+        }
+
+        .right-panel .right-header .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .right-panel .right-header .actions button {
+            background: #1e1e3a;
+            border: 1px solid #2e2e52;
+            color: #a0a0c8;
+            padding: 4px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .right-panel .right-header .actions button:hover {
+            background: #2a2a52;
+            border-color: #4a4a7a;
+            color: #d0d0f0;
+        }
+
+        /* ===== 检查项列表 ===== */
+        .check-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0 8px 0;
+        }
+
+        .check-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .check-list::-webkit-scrollbar-track {
+            background: #0d0d1a;
+        }
+
+        .check-list::-webkit-scrollbar-thumb {
+            background: #2a2a5a;
+            border-radius: 4px;
+        }
+
+        /* 分组标题 */
+        .check-group {
+            padding: 10px 20px 4px 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6a7aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            border-bottom: 1px solid #1a1a34;
+            margin: 6px 16px 2px 16px;
+            padding-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .check-group .group-line {
+            flex: 1;
+            height: 1px;
+            background: #1a1a34;
+        }
+
+        /* 检查项 */
+        .check-item {
+            display: flex;
+            align-items: center;
+            padding: 5px 20px 5px 20px;
+            gap: 10px;
+            transition: background 0.12s;
+            min-height: 32px;
+            flex-wrap: wrap;
+        }
+
+        .check-item:hover {
+            background: #1a1a32;
+        }
+
+        .check-item .chk {
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid #4a4a6a;
+            border-radius: 3px;
+            flex-shrink: 0;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: transparent;
+        }
+
+        .check-item .chk.checked {
+            background: #3a7bd5;
+            border-color: #3a7bd5;
+            color: #fff;
+        }
+
+        .check-item .chk.partial {
+            background: #3a5a7a;
+            border-color: #3a6a8a;
+        }
+
+        .check-item .label {
+            color: #c8c8e8;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .check-item .params {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+
+        .check-item .params input[type="text"],
+        .check-item .params input[type="number"] {
+            width: 52px;
+            background: #0d0d22;
+            border: 1px solid #2a2a4a;
+            border-radius: 4px;
+            padding: 2px 6px;
+            color: #c0c0e8;
+            font-size: 12px;
+            text-align: center;
+            font-family: 'Consolas', monospace;
+            transition: border 0.15s;
+        }
+
+        .check-item .params input:focus {
+            border-color: #4a7ad5;
+            outline: none;
+        }
+
+        .check-item .params .unit {
+            color: #6a6a8a;
+            font-size: 12px;
+            min-width: 18px;
+        }
+
+        .check-item .params .sep {
+            color: #3a3a5a;
+            font-size: 14px;
+        }
+
+        .check-item .params .tag {
+            color: #5a7aaa;
+            font-size: 12px;
+            background: #1a1a34;
+            padding: 0 8px;
+            border-radius: 8px;
+            border: 1px solid #2a3a5a;
+        }
+
+        .check-item .params .tag.threshold {
+            color: #7a9a5a;
+            border-color: #3a5a3a;
+        }
+
+        .check-item .label .sub-label {
+            color: #6a6a8a;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        /* 层级缩进 */
+        .check-item.indent {
+            padding-left: 36px;
+        }
+
+        .check-item.indent2 {
+            padding-left: 52px;
+        }
+
+        /* ===== 底部按钮 ===== */
+        .bottom-bar {
+            background: #111125;
+            border-top: 1px solid #1e1e3a;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .bottom-bar .left-info {
+            color: #6a6a8a;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .bottom-bar .left-info .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #3a7a3a;
+            display: inline-block;
+        }
+
+        .bottom-bar .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .bottom-bar .btn-group button {
+            padding: 6px 22px;
+            border-radius: 6px;
+            border: none;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bottom-bar .btn-group .btn-config {
+            background: #1e2a4a;
+            color: #8aacf0;
+            border: 1px solid #2a4a7a;
+        }
+
+        .bottom-bar .btn-group .btn-config:hover {
+            background: #2a3a6a;
+            border-color: #4a7ad5;
+        }
+
+        .bottom-bar .btn-group .btn-export {
+            background: #1a2a3a;
+            color: #8aaa9a;
+            border: 1px solid #2a4a4a;
+        }
+
+        .bottom-bar .btn-group .btn-export:hover {
+            background: #2a3a4a;
+            border-color: #4a7a6a;
+        }
+
+        .bottom-bar .btn-group .btn-save {
+            background: #2a5a8a;
+            color: #fff;
+            border: 1px solid #3a7ab5;
+            box-shadow: 0 2px 8px rgba(42, 90, 138, 0.3);
+        }
+
+        .bottom-bar .btn-group .btn-save:hover {
+            background: #3a6aaa;
+            border-color: #5a8ad5;
+            box-shadow: 0 4px 16px rgba(42, 90, 138, 0.4);
+        }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 900px) {
+            .left-panel {
+                width: 38%;
+                min-width: 200px;
+            }
+            .check-item .params input[type="text"],
+            .check-item .params input[type="number"] {
+                width: 40px;
+            }
+            .right-panel .right-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .right-panel .right-header .actions {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .app-container {
+                height: auto;
+                max-height: 98vh;
+                border-radius: 8px;
+            }
+            .main-body {
+                flex-direction: column;
+            }
+            .left-panel {
+                width: 100%;
+                min-width: unset;
+                max-height: 40vh;
+                border-right: none;
+                border-bottom: 1px solid #22223e;
+            }
+            .right-panel {
+                max-height: 60vh;
+            }
+            .bottom-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .bottom-bar .btn-group {
+                justify-content: center;
+            }
+            .top-bar {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .top-bar-right {
+                margin-left: auto;
+            }
+            .check-item {
+                padding: 5px 12px;
+                flex-wrap: wrap;
+            }
+            .check-item .params {
+                margin-left: 26px;
+                width: 100%;
+            }
+            .layer-detail .detail-path {
+                font-size: 11px;
+            }
+        }
+
+        /* ===== 自定义滚动条 (Firefox) ===== */
+        .left-panel .layer-list,
+        .check-list {
+            scrollbar-width: thin;
+            scrollbar-color: #2a2a5a #0d0d1a;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+
+        <!-- ===== 顶部栏 ===== -->
+        <div class="top-bar">
+            <div class="top-bar-left">
+                <div class="app-icon">质检工具</div>
+                <div class="toggle-wrap">
+                    <span>只显示参与质检图层</span>
+                    <div class="toggle-switch active" id="toggleSwitch">
+                        <div class="knob"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <span class="badge">v2.4.1</span>
+                <div class="user">
+                    <span>管理员</span>
+                    <div class="avatar">管</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 主体 ===== -->
+        <div class="main-body">
+
+            <!-- ===== 左侧面板 ===== -->
+            <div class="left-panel">
+                <div class="panel-header">
+                    <div class="title">
+                        📋 图层列表
+                        <span class="count">20</span>
+                    </div>
+                    <span class="search-icon">🔍</span>
+                </div>
+
+                <div class="layer-list" id="layerList">
+                    <!-- 图层项由 JS 动态生成 -->
+                </div>
+
+                <!-- 选中图层详情 -->
+                <div class="layer-detail" id="layerDetail">
+                    <div class="detail-label">当前选择图层</div>
+                    <div class="detail-path" id="detailPath">
+                        <span class="highlight">大项目-要素底板下载范围线</span>
+                        <span style="color:#6a6a8a;"> (DataDownloadRange) </span>
+                        <span style="color:#4a6a8a;">— CONP_MGMT.DATEDOWNLOADRANGE</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 右侧面板 ===== -->
+            <div class="right-panel">
+                <div class="right-header">
+                    <div class="sel-info">
+                        <span class="label">当前选择图层：</span>
+                        <span class="name" id="selectedLayerName">大项目-要素底板下载范围线</span>
+                        <span class="code" id="selectedLayerCode">(DataDownloadRange)-CONP_MGMT.DATEDOWNLOADRANGE</span>
+                    </div>
+                    <div class="actions">
+                        <button id="btnSelectAll">全选</button>
+                        <button id="btnDeselectAll">取消全选</button>
+                    </div>
+                </div>
+
+                <div class="check-list" id="checkList">
+                    <!-- 检查项由 JS 动态生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 底部栏 ===== -->
+        <div class="bottom-bar">
+            <div class="left-info">
+                <span class="dot"></span>
+                <span>就绪 · 20 个图层 · 42 项检查</span>
+                <span style="color:#3a3a5a;">|</span>
+                <span>质检方案: 默认</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn-config">⚙ 配置所有图层</button>
+                <button class="btn-export">📤 导出质检配置</button>
+                <button class="btn-save">💾 保存</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ============================================================
+        // 数据
+        // ============================================================
+
+        // 图层数据
+        const layersData = [
+            { id: 'layer1', name: '大项目-要素底板下载范围线', sub: '(DataDownloadRange)', code: 'CONP_MGMT.DATEDOWNLOADRANGE',
+                checked: true },
+            { id: 'layer2', name: '大项目-河口线', sub: '', code: '', checked: false },
+            { id: 'layer3', name: '大项目-线性工程边线', sub: '', code: '', checked: false },
+            { id: 'layer4', name: '大项目-环评影响线', sub: '', code: '', checked: false },
+            { id: 'layer5', name: '大项目-桥台桥墩', sub: '', code: '', checked: false },
+            { id: 'layer6', name: '大项目-骑行专用道', sub: '', code: '', checked: false },
+            { id: 'layer7', name: '大项目-线性工程边沟', sub: '', code: '', checked: false },
+            { id: 'layer8', name: '大项目-步行道', sub: '', code: '', checked: false },
+            { id: 'layer9', name: '大项目-红线内地面永久', sub: '', code: '', checked: false },
+            { id: 'layer10', name: '大项目-线性工程中心线', sub: '', code: '', checked: false },
+            { id: 'layer11', name: '大项目-无障碍电梯等', sub: '', code: '', checked: false },
+            { id: 'layer12', name: '大项目-防汛墙及护岸边线', sub: '', code: '', checked: false },
+            { id: 'layer13', name: '大项目-防汛通道边线', sub: '', code: '', checked: false },
+            { id: 'layer14', name: '大项目-公交专用道', sub: '', code: '', checked: false },
+            { id: 'layer15', name: '建构筑物工程 单体', sub: '', code: '', checked: false },
+            { id: 'layer16', name: '大项目-开工-实测地下构', sub: '', code: '', checked: false },
+            { id: 'layer17', name: '大项目-建筑物分层轮廓线', sub: '', code: '', checked: false },
+            { id: 'layer18', name: '大项目-停车位', sub: '', code: '', checked: false },
+            { id: 'layer19', name: '大项目-开工-实测地下建', sub: '', code: '', checked: false },
+            { id: 'layer20', name: '大项目-竣工-围墙', sub: '', code: '', checked: false },
+        ];
+
+        // 检查项数据
+        const checkGroups = [{
+            id: 'g1',
+            title: '点线面属性',
+            items: [
+                { id: 'c1', label: '全局检查', hasParams: false },
+                { id: 'c2', label: '坐标系检查', hasParams: false },
+                { id: 'c3', label: '多余图层检查', hasParams: false },
+            ]
+        }, {
+            id: 'g2',
+            title: '数据有效性检查',
+            items: [
+                { id: 'c4', label: '数据格式正确性检查', hasParams: false },
+                { id: 'c5', label: '数据属性结构检查', hasParams: false },
+                { id: 'c6', label: '设置全局忽略字段', hasParams: false },
+                { id: 'c7', label: '必要图层存在检查', hasParams: false },
+                { id: 'c8', label: '图层要素类型正确性检查', hasParams: false },
+                { id: 'c9', label: '图层属性结构正确性检查', hasParams: false },
+                { id: 'c10', label: '属性值域控制', hasParams: false },
+                { id: 'c11', label: '属性字段唯一值检查', hasParams: false },
+                { id: 'c12', label: '必要图层不为空检查', hasParams: false },
+                { id: 'c13', label: '字段值小数位', hasParams: false },
+                { id: 'c14', label: '属性字段必填项检查', hasParams: false },
+            ]
+        }, {
+            id: 'g3',
+            title: '单图层常规几何拓扑检查',
+            items: [
+                { id: 'c15', label: '极大面检查', hasParams: true, params: [{ val: '5000', unit: 'km²' }] },
+                { id: 'c16', label: '极小面检查', hasParams: true, params: [{ val: '0.01', unit: 'm' }] },
+                { id: 'c17', label: '微短线检查', hasParams: true, params: [{ val: '0.01', unit: 'm' }] },
+                { id: 'c18', label: '空几何检查', hasParams: false },
+                { id: 'c19', label: '点重叠检查', hasParams: false },
+                { id: 'c20', label: '线重叠检查', hasParams: true, params: [{ val: '0.001', unit: 'm' }] },
+                { id: 'c21', label: '面重叠检查', hasParams: true, params: [{ val: '0.001', unit: 'm' }] },
+                { id: 'c22', label: '多部件检查', hasParams: false },
+                { id: 'c23', label: '自相关检查', hasParams: false },
+                { id: 'c24', label: '图形范围检查', hasParams: false },
+                { id: 'c25', label: '单层面割隙检查', hasParams: true, params: [{ val: '0.001', unit: 'm' }, { val: '10',
+                        unit: '' }] },
+                { id: 'c26', label: '单图层线连通性检查', hasParams: true, params: [{ val: '0.001', unit: 'm' }, { val: '1',
+                        unit: '' }] },
+                { id: 'c27', label: '不规则面要素检查', hasParams: true, params: [{ val: '10', unit: '' }, { val: '0.2',
+                        unit: '阈值' }] },
+                { id: 'c28', label: '环方向错误检查', hasParams: false },
+            ]
+        }, {
+            id: 'g4',
+            title: '多图层常规几何拓扑检查',
+            items: [
+                { id: 'c29', label: '图形叠加分析', hasParams: false },
+            ]
+        }];
+
+        // 所有检查项的 ID 集合（用于全选/取消全选）
+        const allCheckIds = [];
+        checkGroups.forEach(g => g.items.forEach(it => allCheckIds.push(it.id)));
+
+        // 检查项状态（默认全部勾选）
+        const checkStates = {};
+        allCheckIds.forEach(id => { checkStates[id] = true; });
+
+        // 图层选中状态
+        let selectedLayerId = 'layer1';
+
+        // ============================================================
+        // 渲染函数
+        // ============================================================
+
+        function renderLayers() {
+            const container = document.getElementById('layerList');
+            container.innerHTML = '';
+            layersData.forEach(layer => {
+                const div = document.createElement('div');
+                div.className = `layer-item${layer.id === selectedLayerId ? ' active' : ''}`;
+                div.dataset.id = layer.id;
+
+                const chk = document.createElement('span');
+                chk.className = `checkbox${layer.checked ? ' checked' : ''}`;
+                chk.textContent = layer.checked ? '✓' : '';
+                chk.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    layer.checked = !layer.checked;
+                    renderLayers();
+                });
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'layer-name';
+                nameSpan.textContent = layer.name;
+                if (layer.sub) {
+                    const sub = document.createElement('span');
+                    sub.className = 'sub';
+                    sub.textContent = layer.sub;
+                    nameSpan.appendChild(sub);
+                }
+
+                const tag = document.createElement('span');
+                tag.className = 'layer-tag';
+                tag.textContent = layer.code ? layer.code : '图层';
+
+                div.appendChild(chk);
+                div.appendChild(nameSpan);
+                div.appendChild(tag);
+
+                div.addEventListener('click', () => {
+                    selectedLayerId = layer.id;
+                    renderLayers();
+                    updateDetail(layer);
+                    updateRightHeader(layer);
+                });
+
+                container.appendChild(div);
+            });
+        }
+
+        function updateDetail(layer) {
+            const el = document.getElementById('detailPath');
+            const name = layer.name;
+            const sub = layer.sub || '';
+            const code = layer.code || '';
+            el.innerHTML = `
+                <span class="highlight">${name}</span>
+                ${sub ? `<span style="color:#6a6a8a;"> ${sub} </span>` : ''}
+                ${code ? `<span style="color:#4a6a8a;">— ${code}</span>` : ''}
+            `;
+        }
+
+        function updateRightHeader(layer) {
+            document.getElementById('selectedLayerName').textContent = layer.name;
+            const codePart = layer.sub || layer.code || '';
+            document.getElementById('selectedLayerCode').textContent =
+                codePart ? `${layer.sub || ''}${layer.code ? '-'+layer.code : ''}` : '—';
+        }
+
+        function renderChecks() {
+            const container = document.getElementById('checkList');
+            container.innerHTML = '';
+            checkGroups.forEach(group => {
+                // 分组标题
+                const gDiv = document.createElement('div');
+                gDiv.className = 'check-group';
+                gDiv.innerHTML = `
+                    <span>${group.title}</span>
+                    <span class="group-line"></span>
+                `;
+                container.appendChild(gDiv);
+
+                group.items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'check-item';
+                    div.dataset.id = item.id;
+
+                    const chk = document.createElement('span');
+                    const isChecked = checkStates[item.id] !== false;
+                    chk.className = `chk${isChecked ? ' checked' : ''}`;
+                    chk.textContent = isChecked ? '✓' : '';
+                    chk.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        checkStates[item.id] = !checkStates[item.id];
+                        renderChecks();
+                    });
+
+                    const label = document.createElement('span');
+                    label.className = 'label';
+                    label.textContent = item.label;
+
+                    div.appendChild(chk);
+                    div.appendChild(label);
+
+                    // 参数
+                    if (item.hasParams && item.params) {
+                        const paramsWrap = document.createElement('div');
+                        paramsWrap.className = 'params';
+                        item.params.forEach((p, idx) => {
+                            if (idx > 0) {
+                                const sep = document.createElement('span');
+                                sep.className = 'sep';
+                                sep.textContent = ' ';
+                                paramsWrap.appendChild(sep);
+                            }
+                            const input = document.createElement('input');
+                            input.type = 'text';
+                            input.value = p.val;
+                            input.size = 4;
+                            if (p.unit === '阈值') {
+                                input.style.width = '38px';
+                            }
+                            paramsWrap.appendChild(input);
+                            if (p.unit) {
+                                const unitSpan = document.createElement('span');
+                                unitSpan.className = 'unit';
+                                if (p.unit === '阈值') {
+                                    unitSpan.textContent = '阈值';
+                                    unitSpan.style.color = '#7a9a5a';
+                                } else {
+                                    unitSpan.textContent = p.unit;
+                                }
+                                paramsWrap.appendChild(unitSpan);
+                            }
+                        });
+                        div.appendChild(paramsWrap);
+                    }
+
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        // ============================================================
+        // 初始化
+        // ============================================================
+
+        function init() {
+            renderLayers();
+            renderChecks();
+
+            // 默认选中第一个图层
+            const defaultLayer = layersData[0];
+            updateDetail(defaultLayer);
+            updateRightHeader(defaultLayer);
+
+            // 切换开关
+            const toggle = document.getElementById('toggleSwitch');
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('active');
+            });
+
+            // 全选 / 取消全选
+            document.getElementById('btnSelectAll').addEventListener('click', () => {
+                allCheckIds.forEach(id => { checkStates[id] = true; });
+                renderChecks();
+            });
+            document.getElementById('btnDeselectAll').addEventListener('click', () => {
+                allCheckIds.forEach(id => { checkStates[id] = false; });
+                renderChecks();
+            });
+
+            // 保存按钮提示
+            document.querySelector('.btn-save')?.addEventListener('click', () => {
+                alert('✅ 质检配置已保存 (模拟)');
+            });
+            document.querySelector('.btn-export')?.addEventListener('click', () => {
+                alert('📤 质检配置已导出 (模拟)');
+            });
+            document.querySelector('.btn-config')?.addEventListener('click', () => {
+                alert('⚙ 配置所有图层 (模拟)');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+
+</body>
+</html>

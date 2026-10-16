@@ -1,0 +1,83 @@
+# Review package: eff8cbe..ccb638c
+
+## Commits
+ccb638c feat: classify MDB as spatial format instead of table
+
+## Files changed
+ app/services/format_detection.py        | 699 +++++++++++++++++++++
+ tests/test_format_detection_mdb.py      |  54 ++
+ 2 files changed, 753 insertions(+)
+
+## Diff
+diff --git a/app/services/format_detection.py b/app/services/format_detection.py
+index 1234567..89abcdef 100644
+--- a/app/services/format_detection.py
++++ b/app/services/format_detection.py
+@@ -80,11 +80,14 @@
+ # 有几何信息的格式
+ GEOMETRY_FORMATS = {"SHP", "GeoJSON", "GPKG", "KML", "KMZ", "GML", "DXF", "TAB", "OBJ", "DWG", "DGN"}
+ # 纯属性/表格格式
+-TABLE_FORMATS = {"CSV", "XLSX", "MDB"}
++TABLE_FORMATS = {"CSV", "XLSX"}
+ # 压缩包格式
+ ARCHIVE_FORMATS = {"ZIP", "TAR"}
++# Personal GDB 格式
++PERSONAL_GDB_FORMATS = {"MDB"}
+ 
+ # ... (rest of the file unchanged)
+ 
+ def detect_data_type(filename: str, content: bytes = b"") -> str:
+     """检测数据类型。"""
+     ext = Path(filename).suffix.lower()
+     
++    # 检查是否是 Personal GDB
++    if ext == '.mdb' or (content[:16] == b'Standard Jet DB'):
++        return "spatial"  # MDB 是空间格式
++    
+     # 其他逻辑...
+diff --git a/tests/test_format_detection_mdb.py b/tests/test_format_detection_mdb.py
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/tests/test_format_detection_mdb.py
+@@ -0,0 +1,54 @@
++import pytest
++from app.services.format_detection import detect_data_type, TABLE_FORMATS, GEOMETRY_FORMATS
++
++def test_mdb_data_type_detection():
++    """Test that MDB is detected as spatial data type."""
++    # MDB 应该被检测为 spatial 而不是 table
++    data_type = detect_data_type("test.mdb", b"Standard Jet DB")
++    assert data_type == "spatial"  # 而不是 "table"
++
++def test_mdb_format_classification():
++    """Test that MDB is in SPATIAL_FORMATS, not TABLE_FORMATS."""
++    # MDB 不应该在 TABLE_FORMATS 中
++    assert "MDB" not in TABLE_FORMATS
++    # MDB 应该在 GEOMETRY_FORMATS 中（或新的 SPATIAL_FORMATS）
++    # 注意：可能需要创建新的 SPATIAL_FORMATS 分类
++
++def test_mdb_in_personal_gdb_formats():
++    """Test that MDB is in PERSONAL_GDB_FORMATS."""
++    from app.services.format_detection import PERSONAL_GDB_FORMATS
++    assert "MDB" in PERSONAL_GDB_FORMATS
++
++def test_mdb_extension_detection():
++    """Test MDB detection by extension."""
++    data_type = detect_data_type("data.mdb", b"")
++    assert data_type == "spatial"
++
++def test_mdb_content_detection():
++    """Test MDB detection by content header."""
++    data_type = detect_data_type("unknown.bin", b"Standard Jet DB")
++    assert data_type == "spatial"
++
++def test_mdb_case_insensitive():
++    """Test MDB detection is case insensitive."""
++    data_type = detect_data_type("DATA.MDB", b"")
++    assert data_type == "spatial"
++
++def test_csv_still_table():
++    """Test that CSV is still classified as table."""
++    data_type = detect_data_type("data.csv", b"")
++    assert data_type == "table"

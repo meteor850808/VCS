@@ -1,0 +1,6 @@
+[run]
+; P5c：启用 greenlet + thread 并发追踪（asyncpg/SQLAlchemy async 用 greenlet 切换）。
+; 此前未配置，导致 async 路由 handler 的实际执行体不被 coverage 统计，
+; 路由级测试的覆盖贡献被系统性低估（quality.py 实测 18%→28% 仅凭一个 handler 测试）。
+; 启用后 async 服务的真实执行路径纳入统计，测量更准确、可驱动补测。
+concurrency = greenlet,thread

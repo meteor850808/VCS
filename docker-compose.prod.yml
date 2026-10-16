@@ -1,0 +1,71 @@
+# 生产覆盖层：与 docker-compose.yml 叠加使用
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# 变更：api 不外发端口（仅经 nginx）、secrets 文件、资源限额、日志轮转。
+#
+# 注意合并语义：Compose 跨文件对 environment/volumes/secrets 等 map/list 做深合并，
+# 故此处 service.environment 只写增量键，不会丢基线锚点的 POSTGRES_HOST/UPLOAD_DIR 等。
+x-app-common-prod: &app-common-prod
+  secrets:
+    - postgres_password
+    - admin_init_key
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+  deploy:
+    resources:
+      limits: { cpus: "4", memory: 4g }   # compose v2 非 Swarm 下需 `--compatibility` 才生效
+
+services:
+  api:
+    <<: *app-common-prod
+    # `!reset []` 才能真正清空基线已发布的端口（Compose 对 ports 是「拼接」而非「替换」）
+    ports: !reset []               # 覆盖基线 45679:8000，仅 nginx 可达
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+
+  worker:
+    <<: *app-common-prod
+  beat:
+    <<: *app-common-prod
+  migrate:
+    <<: *app-common-prod
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+  flower:
+    secrets:
+      - flower_basic_auth
+    ports: !reset []               # 默认不外发；如需直连另配
+
+  postgres:
+    environment:
+      # 官方 pg 镜像的 file_env 在 POSTGRES_PASSWORD 与 _FILE 同时存在时会报错退出，
+      # 故必须 `!reset null` 清掉基线继承的明文密码，仅保留 secret 文件来源。
+      POSTGRES_PASSWORD: !reset null
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    ports: !reset []               # 生产不外发数据库端口
+    secrets:
+      - postgres_password
+
+  redis:
+    ports: !reset []               # 生产不外发
+
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - vcs_net
+    restart: unless-stopped
+
+secrets:
+  postgres_password: { file: ./secrets/postgres_password.txt }
+  admin_init_key:    { file: ./secrets/admin_init_key.txt }
+  flower_basic_auth: { file: ./secrets/flower_basic_auth.txt }

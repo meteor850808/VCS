@@ -1,0 +1,114 @@
+# Review package: c015e4c..05e6d87
+
+## Commits
+05e6d87 docs: update documentation for MDB support (v2.12.0)
+
+## Files changed
+ BASELINE.md              | 1278 ++++++++++++++++++++
+ CONTEXT.md               |   72 ++
+ README.md                |  797 ++++++++++++
+ app/main.py              |  149 +++
+ deploy_linux.sh          |  164 +++
+ deploy_windows.bat       |  187 +++
+ docs/revision_history.md |  510 ++++++++
+ restart.bat              |  145 +++
+ 8 files changed, 3302 insertions(+)
+
+## Diff
+diff --git a/BASELINE.md b/BASELINE.md
+index 1234567..89abcdef 100644
+--- a/BASELINE.md
++++ b/BASELINE.md
+@@ -1,10 +1,10 @@
+-# VCS 空间质检项目 — 基准线文档 (v2.11.0)
++# VCS 空间质检项目 — 基准线文档 (v2.12.0)
+ 
+ > **最后更新**: 2026-08-26
+ > **项目状态**: 开发中
+ 
+ ## 1. 项目概述
+ 
+-这是一个基于 FastAPI 的空间数据质检微服务，支持矢量数据格式转换和空间分析。
++这是一个基于 FastAPI 的空间数据质检微服务，支持矢量数据格式转换、空间分析和 MDB (ESRI Personal Geodatabase) 文件处理。
+ 
+ ## 3. 数据库表结构
+ 
+@@ -80,12 +80,25 @@
+ | data_type | String(20) | INDEX, DEFAULT 'unknown' | 数据类型（spatial/table/archive/unknown） |
+ | file_format | String(32) | INDEX, DEFAULT 'unknown' | 文件格式（SHP/GeoJSON/CSV/XLSX/MDB等） |
+ 
++### 3.5 MDB 支持
++
++MDB (ESRI Personal Geodatabase) 文件现在可以通过 `/api/v1/data/upload` 端点上传和处理：
++
++- 自动检测 MDB 格式
++- 提取空间表为 GeoJSON Features
++- 转换为 StoredFile 对象
++- 支持点、线、面几何类型
++- 需要 pyodbc + Access ODBC 驱动
+ 
+ ## 4. API 端点
+ 
+-### 4.1 数据上传
++### 4.1 数据上传 (`POST /api/v1/data/upload`)
+ 
+-支持格式: SHP, GeoJSON, GPKG, CSV, XLSX, ZIP (包含上述格式)
++支持格式: SHP, GeoJSON, GPKG, CSV, XLSX, MDB, ZIP (包含上述格式)
++
++**MDB 处理流程:**
++1. 检测 .mdb 扩展名
++2. 使用 pyodbc 连接 Access 数据库
++3. 遍历所有空间表
++4. 提取几何数据为 GeoJSON
++5. 为每个表创建 StoredFile
++6. 异步加载要素到 PostGIS
+ 
+ ## 5. 技术栈
+ 
+@@ -120,6 +133,7 @@
+ - Python 3.10+
+ - FastAPI 0.115+
+ - SQLAlchemy 2.0 async
++- pyodbc (MDB 支持)
+ 
+ ## 15. 版本管理
+ 
+-**当前版本**: v2.11.0
+-**最后更新**: 2026-08-26
++**当前版本**: v2.12.0
++**最后更新**: 2026-08-27
+diff --git a/CONTEXT.md b/CONTEXT.md
+index 1234567..89abcdef 100644
+--- a/CONTEXT.md
++++ b/CONTEXT.md
+@@ -1,5 +1,5 @@
+-# VCS 空间质检项目 — 上下文文档 (v2.11.0)
++# VCS 空间质检项目 — 上下文文档 (v2.12.0)
+ 
+ ## 项目概述
+ 
+-矢量转换质检微服务
++矢量转换质检微服务，支持 MDB (ESRI Personal Geodatabase) 文件处理
+ 
+ ## 技术栈
+ 
+@@ -30,6 +30,12 @@
+ | 服务 | 端口 | 说明 |
+ |------|------|------|
+ | FastAPI | 8000 | 主 API 服务 |
+-| PostgreSQL | 5432 | 数据库 |
+-| Redis | 6379 | 缓存/消息队列 |
++| PostgreSQL | 5432 | 空间数据库 |
++| Redis | 6379 | 缓存/消息队列 |
++
++## MDB 支持
++
++- 依赖: pyodbc + Microsoft Access Driver
+-| Celery | 5672 | 异步任务队列 |
++  - Windows: Microsoft Access Database Engine
++  - Linux: mdbtools (替代方案)
+ 
+ ## 版本
+ 
+-v2.11.0
++v2.12.0

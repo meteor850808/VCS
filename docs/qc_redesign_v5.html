@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据检查 — 完整功能版 v5</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;}
+  body{background:#0b0e14;color:#e6edf3;display:flex;justify-content:center;padding:8px;min-height:100vh;}
+  .app{width:1440px;max-width:100vw;background:#13171f;border-radius:6px;border:1px solid #252830;display:flex;flex-direction:column;overflow:hidden;height:96vh;}
+
+  /* ── Top Bar 28px ── */
+  .tb{display:flex;align-items:center;justify-content:space-between;padding:0 10px;height:28px;background:#161c24;border-bottom:1px solid #252830;flex-shrink:0;}
+  .tb .logo{font-size:11px;font-weight:600;color:#58a6ff;display:flex;align-items:center;gap:4px;}
+  .tb .logo::before{content:"⬡";font-size:14px;}
+  .tb .ri{display:flex;align-items:center;gap:6px;font-size:10px;color:#6e7681;}
+  .tb .ri .v{background:#1c2128;padding:0 6px;border-radius:4px;font-size:9px;border:1px solid #252830;}
+  .tb .ri .av{width:18px;height:18px;border-radius:50%;background:#1a2a4a;display:flex;align-items:center;justify-content:center;color:#58a6ff;font-size:9px;font-weight:600;}
+
+  /* ── Body ── */
+  .bd{display:flex;flex:1;overflow:hidden;}
+
+  /* ══ Left 150px ══ */
+  .left{width:150px;min-width:120px;background:#0f131b;border-right:1px solid #252830;display:flex;flex-direction:column;flex-shrink:0;}
+  .lh{display:flex;align-items:center;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #252830;flex-shrink:0;}
+  .lh .t{font-size:9px;font-weight:600;color:#6e7681;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:3px;}
+  .lh .t .c{background:#1c2128;padding:0 5px;border-radius:4px;font-size:8px;color:#484f58;}
+  .lh .sr{color:#484f58;font-size:9px;cursor:pointer;}
+  .fl{flex:1;overflow-y:auto;}
+  .fl::-webkit-scrollbar{width:2px;}
+  .fl::-webkit-scrollbar-thumb{background:#252830;border-radius:2px;}
+  .fi{display:flex;align-items:center;padding:2px 8px 2px 4px;gap:4px;cursor:pointer;border-left:2px solid transparent;}
+  .fi:hover{background:#161c24;}
+  .fi.sl{border-left-color:#58a6ff;background:#0d1824;}
+  .fi .cb{width:10px;height:10px;border:1.5px solid #30363d;border-radius:2px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:6px;color:transparent;cursor:pointer;}
+  .fi .cb.on{background:#58a6ff;border-color:#58a6ff;color:#fff;}
+  .fi .nm{font-size:10px;color:#c9d1d9;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fi .ty{font-size:7px;color:#484f58;padding:0 3px;border-radius:3px;border:1px solid #252830;flex-shrink:0;}
+
+  /* ══ Main ══ */
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+  /* ── Standard Bar 26px ── */
+  .sb{display:flex;align-items:center;gap:6px;padding:2px 10px;height:26px;background:#11151d;border-bottom:1px solid #252830;flex-shrink:0;}
+  .sb select{background:#0d1117;border:1px solid #252830;border-radius:3px;padding:1px 4px;color:#c9d1d9;font-size:10px;height:18px;max-width:160px;}
+  .sb select:focus{border-color:#58a6ff;}
+  .sb .tag{font-size:9px;padding:0 6px;border-radius:3px;display:none;height:16px;line-height:16px;}
+  .sb .tag.on{display:inline-block;background:#0d1a2e;color:#58a6ff;border:1px solid #58a6ff33;}
+  .sb .pv{font-size:9px;color:#6e7681;cursor:pointer;display:flex;align-items:center;gap:2px;white-space:nowrap;}
+  .sb .pv:hover{color:#8b949e;}
+  .sb .ri{display:flex;align-items:center;gap:3px;margin-left:auto;}
+  .sb .ri button{font-size:9px;padding:1px 6px;border-radius:3px;border:1px solid #252830;background:#1c2128;color:#6e7681;cursor:pointer;white-space:nowrap;}
+  .sb .ri button:hover{color:#8b949e;border-color:#30363d;}
+  .sb .ri .go{background:#1f3a5f;border-color:#58a6ff44;color:#58a6ff;}
+  .sb .ri .go:hover{background:#2a4a7a;}
+
+  /* ── Standard Tree ── */
+  .st{display:none;padding:2px 10px 3px;background:#0d1117;border-bottom:1px solid #252830;font-size:9px;color:#6e7681;line-height:1.6;}
+  .st.sh{display:block;}
+  .st .sn{color:#58a6ff;}
+  .st .sf{cursor:help;border-bottom:1px dotted #252830;}
+  .st .no{color:#484f58;font-style:italic;}
+
+  /* ── Check Section (collapsible) ── */
+  .csec{flex-shrink:0;border-bottom:1px solid #252830;background:#10141c;}
+  .csec-h{display:flex;align-items:center;gap:6px;padding:3px 10px;cursor:pointer;user-select:none;}
+  .csec-h:hover{background:#161c24;}
+  .csec-h .ar{font-size:7px;color:#484f58;transition:transform .12s;width:8px;text-align:center;}
+  .csec-h .ar.op{transform:rotate(90deg);}
+  .csec-h .t{font-size:10px;font-weight:600;color:#8b949e;}
+  .csec-h .c{font-size:8px;color:#484f58;}
+  .csec-h .sp{flex:1;}
+  .csec-h .go{font-size:9px;padding:1px 8px;border-radius:3px;border:1px solid #58a6ff44;background:#1f3a5f;color:#58a6ff;cursor:pointer;}
+  .csec-h .go:hover{background:#2a4a7a;}
+  .csec-b{display:none;}
+  .csec-b.sh{display:block;}
+  .cl{max-height:340px;overflow-y:auto;padding:1px 0;}
+  .cl::-webkit-scrollbar{width:3px;}
+  .cl::-webkit-scrollbar-thumb{background:#252830;border-radius:3px;}
+
+  .grp{margin:0 6px;}
+  .gh{display:flex;align-items:center;gap:4px;padding:3px 4px 2px;border-bottom:1px solid #1c2128;margin-top:1px;}
+  .gh:first-child{margin-top:0;}
+  .gh .ar{font-size:6px;color:#484f58;width:8px;text-align:center;cursor:pointer;transition:transform .12s;}
+  .gh .ar.op{transform:rotate(90deg);}
+  .gh .ic{font-size:10px;}
+  .gh .gt{font-size:10px;font-weight:600;color:#8b949e;flex:1;cursor:pointer;}
+  .gh .gt:hover{color:#c9d1d9;}
+  .gh .n{font-size:8px;color:#484f58;}
+  .gh .ga{font-size:8px;padding:0 6px;border-radius:3px;border:1px solid #252830;background:transparent;color:#6e7681;cursor:pointer;height:16px;line-height:14px;}
+  .gh .ga:hover{border-color:#484f58;color:#8b949e;}
+  .gh .ga.on{background:#1f3a5f22;border-color:#58a6ff44;color:#58a6ff;}
+  .gb{padding:2px 0 2px 6px;display:flex;flex-wrap:wrap;gap:2px 4px;}
+  .gb.cl{display:none;}
+  .ri{display:inline-flex;align-items:center;padding:1px 5px;gap:3px;min-height:18px;border-radius:3px;border:1px solid #1c2128;background:#0f131b;}
+  .ri:hover{background:#161c24;border-color:#30363d;}
+  .ri.off{opacity:.45;}
+  .ri.off:hover{opacity:.8;}
+  .ri .ck{width:10px;height:10px;border:1.5px solid #30363d;border-radius:2px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:6px;color:transparent;cursor:pointer;}
+  .ri .ck.on{background:#58a6ff;border-color:#58a6ff;color:#fff;}
+  .ri .lb{font-size:10px;color:#c9d1d9;flex-shrink:0;display:flex;align-items:center;gap:4px;cursor:pointer;}
+  .ri .lb .sl{font-size:7px;padding:0 4px;border-radius:2px;background:#0d1a2e;color:#58a6ff;border:1px solid #58a6ff22;}
+  .ri .pr{display:flex;align-items:center;gap:2px;flex-wrap:nowrap;}
+  .ri .pr input{width:30px;background:#0b0e14;border:1px solid #252830;border-radius:2px;padding:0 2px;color:#c9d1d9;font-size:9px;text-align:center;font-family:Consolas,monospace;height:14px;}
+  .ri .pr input:focus{border-color:#58a6ff;outline:none;}
+  .ri .pr .u{font-size:8px;color:#6e7681;min-width:8px;}
+  .ri .pr .th{color:#7a9a5a;}
+
+  /* ── Report Section ── */
+  .rsec{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#11151d;}
+  .rsec-h{display:flex;align-items:center;gap:8px;padding:3px 10px;border-bottom:1px solid #252830;flex-shrink:0;}
+  .rsec-h .t{font-size:10px;font-weight:600;color:#8b949e;display:flex;align-items:center;gap:4px;}
+  .rsec-h .t .c{background:#1c2128;padding:0 5px;border-radius:4px;font-size:8px;color:#484f58;font-weight:400;}
+  .rsec-h .sp{flex:1;}
+  .rsec-h input{background:#0d1117;border:1px solid #252830;border-radius:3px;padding:1px 6px;color:#c9d1d9;font-size:9px;height:16px;width:130px;}
+  .rsec-h input:focus{border-color:#58a6ff;outline:none;}
+  .rtb-wrap{flex:1;overflow-y:auto;}
+  .rtb-wrap::-webkit-scrollbar{width:3px;}
+  .rtb-wrap::-webkit-scrollbar-thumb{background:#252830;border-radius:3px;}
+  table.rt{width:100%;border-collapse:collapse;font-size:10px;}
+  table.rt th{text-align:left;padding:3px 6px;color:#6e7681;font-weight:500;font-size:9px;border-bottom:1px solid #252830;white-space:nowrap;position:sticky;top:0;background:#11151d;}
+  table.rt td{padding:2px 6px;border-bottom:1px solid #1c2128;color:#c9d1d9;white-space:nowrap;}
+  table.rt tr{cursor:pointer;}
+  table.rt tr:hover{background:#161c24;}
+  table.rt .fn{color:#e6edf3;font-weight:500;font-size:10px;}
+  table.rt .ok{color:#3fb950;}
+  table.rt .bad{color:#f85149;}
+  table.rt .na{color:#484f58;}
+  table.rt .tm{color:#6e7681;font-size:9px;}
+  table.rt .btns{display:flex;gap:2px;}
+  table.rt .btns button{font-size:8px;padding:0 5px;border-radius:2px;border:1px solid #252830;background:#1c2128;color:#6e7681;cursor:pointer;height:14px;line-height:12px;}
+  table.rt .btns button:hover{color:#8b949e;border-color:#30363d;}
+  /* detail row */
+  tr.detail td{background:#0d1117;padding:6px 10px;white-space:normal;}
+  .det{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .det-box{border:1px solid #252830;border-radius:4px;overflow:hidden;}
+  .det-box .dt{font-size:9px;font-weight:600;color:#8b949e;padding:3px 8px;background:#161c24;border-bottom:1px solid #252830;}
+  .det-box table{width:100%;border-collapse:collapse;font-size:9px;}
+  .det-box table th{padding:2px 6px;color:#6e7681;font-weight:500;font-size:8px;text-align:left;border-bottom:1px solid #1c2128;}
+  .det-box table td{padding:2px 6px;border-bottom:1px solid #1c2128;color:#c9d1d9;}
+  .det-box .ok{color:#3fb950;}
+  .det-box .bad{color:#f85149;}
+
+  /* ── Tooltip ── */
+  .tip{display:none;position:fixed;z-index:99;background:#1c2128;border:1px solid #30363d;border-radius:4px;padding:6px 8px;font-size:9px;color:#c9d1d9;max-width:280px;box-shadow:0 4px 16px rgba(0,0,0,.5);}
+  .tip .tt{font-weight:600;color:#e6edf3;margin-bottom:3px;font-size:10px;}
+  .tip .row{display:flex;gap:4px;margin-bottom:1px;}
+  .tip .row .k{color:#6e7681;font-size:8px;}
+
+  /* ── Bottom Bar 26px ── */
+  .bb{display:flex;align-items:center;justify-content:space-between;padding:0 10px;height:26px;background:#11151d;border-top:1px solid #252830;flex-shrink:0;}
+  .bb-l{display:flex;align-items:center;gap:6px;font-size:9px;color:#6e7681;}
+  .bb-l .dot{width:4px;height:4px;border-radius:50%;background:#3fb950;display:inline-block;}
+  .bb-l .sp{color:#252830;}
+  .bb-r{display:flex;gap:2px;}
+  .bb-r button{font-size:9px;padding:1px 7px;border-radius:3px;border:1px solid #252830;background:#1c2128;color:#8b949e;cursor:pointer;display:flex;align-items:center;gap:2px;line-height:1.4;}
+  .bb-r button:hover{background:#21262d;border-color:#30363d;}
+  .bb-r .go{background:#1f3a5f;border-color:#58a6ff44;color:#58a6ff;}
+  .bb-r .go:hover{background:#2a4a7a;}
+  .bb-r .sv{background:#238636;border-color:#3fb95044;color:#fff;}
+  .bb-r .sv:hover{background:#2ea043;}
+
+  /* ── ══ 字体放大覆盖（第二档） ══ */
+  .tb{height:34px;}
+  .tb .logo{font-size:13px;}
+  .tb .ri{font-size:12px;}
+  .tb .ri .v{font-size:11px;padding:0 8px;}
+  .tb .ri .av{font-size:11px;width:22px;height:22px;}
+  .lh .t{font-size:12px;}
+  .lh .t .c{font-size:10px;}
+  .lh .sr{font-size:12px;}
+  .fi{padding:3px 8px 3px 4px;}
+  .fi .nm{font-size:13px;}
+  .fi .ty{font-size:9px;}
+  .sb{height:32px;}
+  .sb select{font-size:12px;height:22px;max-width:200px;}
+  .sb .tag{font-size:11px;height:20px;line-height:20px;}
+  .sb .pv{font-size:11px;}
+  .sb .ri button{font-size:11px;padding:3px 8px;}
+  .st{font-size:11px;line-height:1.8;}
+  .csec-h{padding:5px 10px;}
+  .csec-h .t{font-size:12px;}
+  .csec-h .c{font-size:10px;}
+  .csec-h .go{font-size:11px;padding:3px 10px;}
+  .gh{padding:4px 4px 3px;}
+  .gh .gt{font-size:12px;}
+  .gh .n{font-size:10px;}
+  .gh .ga{font-size:10px;height:20px;line-height:18px;}
+  .ri{min-height:22px;padding:3px 7px;gap:4px;}
+  .ri .ck{width:12px;height:12px;font-size:7px;}
+  .ri .lb{font-size:13px;}
+  .ri .lb .sl{font-size:9px;padding:0 5px;}
+  .ri .pr input{width:38px;font-size:11px;height:18px;}
+  .ri .pr .u{font-size:10px;}
+  .rsec-h{padding:5px 10px;}
+  .rsec-h .t{font-size:12px;}
+  .rsec-h .t .c{font-size:10px;}
+  .rsec-h input{font-size:11px;height:20px;width:150px;}
+  table.rt{font-size:12px;}
+  table.rt th{font-size:11px;padding:5px 8px;}
+  table.rt td{padding:4px 8px;}
+  table.rt .fn{font-size:12px;}
+  table.rt .tm{font-size:11px;}
+  table.rt .btns button{font-size:10px;height:18px;line-height:16px;padding:0 7px;}
+  .det-box .dt{font-size:11px;padding:5px 8px;}
+  .det-box table{font-size:11px;}
+  .det-box table th{font-size:10px;padding:4px 7px;}
+  .det-box table td{padding:4px 7px;}
+  .tip{font-size:11px;padding:8px 10px;}
+  .tip .tt{font-size:12px;}
+  .tip .row .k{font-size:10px;}
+  .bb{height:32px;}
+  .bb-l{font-size:11px;}
+  .bb-r button{font-size:11px;padding:3px 9px;}
+  .cl{max-height:380px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ════ Top Bar ════ -->
+  <div class="tb">
+    <div class="logo">质检工具</div>
+    <div class="ri"><span class="v">v2.6</span><span>管理员</span><div class="av">管</div></div>
+  </div>
+
+  <!-- ════ Body ════ -->
+  <div class="bd">
+
+    <!-- ══ Left: Files ══ -->
+    <div class="left">
+      <div class="lh">
+        <div class="t">📁 文件 <span class="c">13</span></div>
+        <span class="sr">🔍</span>
+      </div>
+      <div class="fl" id="fList"></div>
+    </div>
+
+    <!-- ══ Main ══ -->
+    <div class="main">
+
+      <!-- ── Standard Bar ── -->
+      <div class="sb">
+        <select id="stdSel" onchange="onStd()">
+          <option value="">— 不关联标准</option>
+          <optgroup label="📏 国家标准">
+            <option value="s1">国土空间规划 v2.1</option>
+            <option value="s2">三调数据规范</option>
+          </optgroup>
+          <optgroup label="🏗 市政标准">
+            <option value="s3">市政管线 v3.0</option>
+            <option value="s4">道路质检标准</option>
+          </optgroup>
+          <optgroup label="📋 自定义">
+            <option value="s5">项目自定义标准</option>
+          </optgroup>
+        </select>
+        <span class="tag" id="stdTag">📏 国土空间规划 v2.1</span>
+        <span class="pv" id="stdPv" onclick="togSt()">📖 结构 ▸</span>
+        <div class="ri">
+          <button onclick="rtAll(true)">✅全选</button>
+          <button onclick="rtAll(false)">⬜取消</button>
+          <button class="go" onclick="runCheck()">▶ 执行</button>
+        </div>
+      </div>
+
+      <!-- ── Standard Tree ── -->
+      <div class="st" id="stdTree">
+        <span class="sn">📄 面_土地利用</span> <span class="sf" title="varchar(20)·主键">用地代码</span>, <span class="sf" title="varchar(100)·必填">用地名称</span>, <span class="sf" title="float·必填">面积</span>, <span class="sf" title="varchar(50)">备注</span><br>
+        <span class="sn">📄 线_道路</span> <span class="sf" title="varchar(30)·必填">道路编号</span>, <span class="sf" title="varchar(100)·必填">道路名称</span>, <span class="sf" title="float">长度</span><br>
+        <span class="sn">📄 点_设施</span> <span class="sf" title="varchar(20)·必填">设施编码</span>, <span class="sf" title="varchar(100)">设施名称</span>
+      </div>
+      <div class="st" id="noStdTree"><span class="no">未关联标准，属性/结构检查跳过</span></div>
+
+      <!-- ── Check Config (collapsible) ── -->
+      <div class="csec">
+        <div class="csec-h" onclick="togCsec(event)">
+          <span class="ar op" id="csecAr">▶</span>
+          <span class="t">🔬 检查配置</span>
+          <span class="c" id="cfgCnt">29 项已选</span>
+          <span class="sp"></span>
+          <button class="go" onclick="event.stopPropagation();runCheck()">▶ 执行质检</button>
+        </div>
+        <div class="csec-b sh" id="csecB">
+          <div class="cl" id="cList"></div>
+        </div>
+      </div>
+
+      <!-- ── Report Section ── -->
+      <div class="rsec">
+        <div class="rsec-h">
+          <span class="t">📋 检查报告 <span class="c" id="rptCnt">5</span></span>
+          <span class="sp"></span>
+          <input type="text" id="rptSearch" placeholder="🔍 搜索文件名..." oninput="rRpt()">
+        </div>
+        <div class="rtb-wrap">
+          <table class="rt">
+            <thead><tr>
+              <th style="width:26%;">文件名</th>
+              <th style="width:8%;">要素</th>
+              <th style="width:13%;">属性检查</th>
+              <th style="width:13%;">拓扑检查</th>
+              <th style="width:13%;">检查时间</th>
+              <th style="width:16%;">操作</th>
+            </tr></thead>
+            <tbody id="rptBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Bottom Bar ── -->
+      <div class="bb">
+        <div class="bb-l">
+          <span class="dot"></span>
+          <span>已选 <b id="fCnt">3</b> 个文件 · <b id="cCnt">29</b> 项检查</span>
+          <span class="sp">|</span>
+          <span>方案: 默认</span>
+        </div>
+        <div class="bb-r">
+          <button onclick="expCfg()">📤 导出配置</button>
+          <button class="go" onclick="runCheck()">▶ 执行质检</button>
+          <button class="sv" onclick="saveCfg()">💾 保存方案</button>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /bd -->
+</div>
+
+<!-- Tooltip -->
+<div class="tip" id="tip"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// Data
+// ═══════════════════════════════════════════════════════
+
+const files = [
+  {id:'f1',name:'要素底板下载范围线',typ:'矢量',sel:true},
+  {id:'f2',name:'河口线',typ:'矢量',sel:false},
+  {id:'f3',name:'线性工程边线',typ:'矢量',sel:true},
+  {id:'f4',name:'环评影响线',typ:'矢量',sel:false},
+  {id:'f5',name:'桥台桥墩',typ:'矢量',sel:false},
+  {id:'f6',name:'骑行专用道',typ:'矢量',sel:false},
+  {id:'f7',name:'边沟',typ:'矢量',sel:false},
+  {id:'f8',name:'步行道',typ:'矢量',sel:false},
+  {id:'f9',name:'红线内地面永久',typ:'矢量',sel:false},
+  {id:'f10',name:'中心线',typ:'矢量',sel:false},
+  {id:'f11',name:'DEM 高程',typ:'栅格',sel:true},
+  {id:'f12',name:'DOM 正射影像',typ:'栅格',sel:false},
+  {id:'f13',name:'用地分类统计',typ:'表格',sel:false},
+];
+
+const groups = [
+  {id:'attr', icon:'📐', label:'点线面属性', items:[
+    {id:'a1',label:'全局检查'},{id:'a2',label:'坐标系检查'},{id:'a3',label:'多余图层检查'},
+  ]},
+  {id:'valid', icon:'✅', label:'数据有效性检查', std:true, items:[
+    {id:'v1',label:'数据格式正确性'},{id:'v2',label:'属性结构检查'},{id:'v3',label:'设置全局忽略字段'},
+    {id:'v4',label:'必要图层存在'},{id:'v5',label:'要素类型正确性'},{id:'v6',label:'属性结构正确性'},
+    {id:'v7',label:'属性值域控制'},{id:'v8',label:'唯一值检查'},{id:'v9',label:'图层不为空'},
+    {id:'v10',label:'字段小数位'},{id:'v11',label:'必填项检查'},
+  ]},
+  {id:'topo1', icon:'🔷', label:'单图层几何拓扑', items:[
+    {id:'t1',label:'极大面',pr:[{v:'5000',u:'km²'}]},{id:'t2',label:'极小面',pr:[{v:'0.01',u:'m²'}]},
+    {id:'t3',label:'微短线',pr:[{v:'0.01',u:'m'}]},{id:'t4',label:'空几何'},{id:'t5',label:'点重叠'},
+    {id:'t6',label:'线重叠',pr:[{v:'0.001',u:'m'}]},{id:'t7',label:'面重叠',pr:[{v:'0.001',u:'m'}]},
+    {id:'t8',label:'多部件'},{id:'t9',label:'自相交'},{id:'t10',label:'图形范围'},
+    {id:'t11',label:'面割隙',pr:[{v:'0.001',u:'m'},{v:'10',u:''}]},{id:'t12',label:'线连通',pr:[{v:'0.001',u:'m'},{v:'1',u:''}]},
+    {id:'t13',label:'不规则面',pr:[{v:'10',u:''},{v:'0.2',u:'阈'}]},{id:'t14',label:'环方向'},
+  ]},
+  {id:'topo2', icon:'🔗', label:'多图层拓扑', items:[
+    {id:'m1',label:'图形叠加分析'},
+  ]},
+];
+
+// Reports (mock)
+const reports = [
+  {id:'r1',file:'要素底板下载范围线',feat:1284,aSum:{t:21,p:21,f:0},tSum:{t:15,p:15,f:0},time:'2026-07-30 14:23',
+    attr:[{code:'V01',name:'属性结构检查',st:'pass',chk:1284,fail:0,msg:'字段结构符合标准'},
+          {code:'V07',name:'属性值域控制',st:'pass',chk:1284,fail:0,msg:'值域均在允许范围内'}],
+    topo:[{code:'T01',name:'空几何',st:'pass',chk:1284,fail:0,msg:'无空几何'},
+          {code:'T03',name:'极大面',st:'pass',chk:1284,fail:0,msg:'无超大面'}]},
+  {id:'r2',file:'河口线',feat:356,aSum:{t:21,p:18,f:3},tSum:{t:15,p:8,f:7},time:'2026-07-30 12:01',
+    attr:[{code:'V02',name:'必填项检查',st:'fail',chk:356,fail:3,msg:'3 条记录缺少必填字段 [道路编号]'},
+          {code:'V07',name:'属性值域控制',st:'pass',chk:356,fail:0,msg:'值域正常'}],
+    topo:[{code:'T05',name:'微短线',st:'fail',chk:356,fail:4,msg:'4 条微短线 < 0.01m'},
+          {code:'T06',name:'线重叠',st:'fail',chk:356,fail:3,msg:'3 处线重叠'}]},
+  {id:'r3',file:'线性工程边线',feat:892,aSum:{t:21,p:18,f:3},tSum:{t:15,p:15,f:0},time:'2026-07-29 16:45',
+    attr:[{code:'V01',name:'属性结构检查',st:'fail',chk:892,fail:2,msg:'2 条字段长度超限'},
+          {code:'V11',name:'唯一值检查',st:'fail',chk:892,fail:1,msg:'1 个重复编码'}],
+    topo:[{code:'T12',name:'环方向',st:'pass',chk:892,fail:0,msg:'全部符合'}]},
+  {id:'r4',file:'环评影响线',feat:147,aSum:{t:21,p:12,f:9},tSum:{t:15,p:0,f:0},time:'2026-07-29 10:30',
+    attr:[{code:'V04',name:'必要图层存在',st:'fail',chk:147,fail:1,msg:'缺少图层 [影响线_标注]'}],
+    topo:[]},
+  {id:'r5',file:'桥台桥墩',feat:64,aSum:{t:21,p:9,f:12},tSum:{t:15,p:5,f:10},time:'2026-07-28 09:15',
+    attr:[{code:'V03',name:'忽略字段',st:'fail',chk:64,fail:12,msg:'12 个字段未在忽略列表'}],
+    topo:[{code:'T07',name:'点重叠',st:'fail',chk:64,fail:10,msg:'10 处点重叠'}]},
+];
+
+// State
+const allIds=[];groups.forEach(g=>g.items.forEach(it=>allIds.push(it.id)));
+const st={};allIds.forEach(id=>{st[id]=true;});
+let sFile='f1';
+const coll={};groups.forEach((_,i)=>{coll[i]=true;});
+let openRptId=null;
+
+function cntOn(){return allIds.filter(id=>st[id]!==false).length;}
+function selCnt(){return files.filter(f=>f.sel).length;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ═══════════════════════════════════════════════════════
+// Render: Files
+// ═══════════════════════════════════════════════════════
+
+function rF(){
+  const el=document.getElementById('fList');
+  el.innerHTML=files.map(f=>'<div class="fi'+(f.id===sFile?' sl':'')+'" data-id="'+f.id+'">'
+    +'<span class="cb'+(f.sel?' on':'')+'" onclick="event.stopPropagation();tF(\''+f.id+'\')">'+(f.sel?'✓':'')+'</span>'
+    +'<span class="nm">'+esc(f.name)+'</span>'
+    +'<span class="ty">'+f.typ+'</span></div>').join('');
+  el.querySelectorAll('.fi').forEach(function(d){d.addEventListener('click',function(){sFile=this.dataset.id;rF();});});
+  document.getElementById('fCnt').textContent=selCnt();
+}
+function tF(id){var f=files.find(function(x){return x.id===id;});if(f)f.sel=!f.sel;rF();}
+
+// ═══════════════════════════════════════════════════════
+// Render: Check Config
+// ═══════════════════════════════════════════════════════
+
+function rC(){
+  var el=document.getElementById('cList');
+  var hs=document.getElementById('stdSel').value!=='';
+  el.innerHTML=groups.map(function(g,gi){
+    var op=coll[gi]?'op':'';
+    var allOn=g.items.every(function(it){return st[it.id]!==false;});
+    var someOn=g.items.some(function(it){return st[it.id]!==false;});
+    var its=g.items.map(function(it){
+      var ck=st[it.id]!==false?'on':'';
+      var pr='';
+      if(it.pr){
+        pr='<div class="pr">'+it.pr.map(function(p,i){
+          var pre=i>0?'<span class="u"> </span>':'';
+          var uCls=p.u==='阈'?' th':'';
+          return pre+'<input type="text" value="'+p.v+'"><span class="u'+uCls+'">'+(p.u||'')+'</span>';
+        }).join('')+'</div>';
+      }
+      var sl=(g.std&&hs)?'<span class="sl">📏</span>':'';
+      return '<div class="ri"><span class="ck'+ck+'" onclick="tI(\''+it.id+'\')">'+(ck?'✓':'')+'</span>'
+        +'<span class="lb">'+esc(it.label)+sl+'</span>'+pr+'</div>';
+    }).join('');
+    return '<div class="grp">'
+      +'<div class="gh"><span class="ar '+op+'" onclick="togG('+gi+')">▶</span>'
+      +'<span class="ic">'+g.icon+'</span>'
+      +'<span class="gt" onclick="togG('+gi+')">'+esc(g.label)+'</span>'
+      +'<span class="n">'+g.items.filter(function(it){return st[it.id]!==false;}).length+'/'+g.items.length+'</span>'
+      +'<button class="ga'+(someOn?' on':'')+'" onclick="tGA('+gi+')">'+(allOn?'取消全选':'全选')+'</button></div>'
+      +'<div class="gb'+(coll[gi]?'':' cl')+'">'+its+'</div></div>';
+  }).join('');
+  document.getElementById('cCnt').textContent=cntOn();
+  document.getElementById('cfgCnt').textContent=cntOn()+' 项已选';
+}
+function tI(id){st[id]=!st[id];rC();}
+function rtAll(v){allIds.forEach(function(id){st[id]=v;});rC();}
+function togG(i){coll[i]=!coll[i];rC();}
+function tGA(i){var g=groups[i];var a=g.items.every(function(it){return st[it.id]!==false;});g.items.forEach(function(it){st[it.id]=!a;});rC();}
+
+// Check section collapse
+function togCsec(e){
+  var b=document.getElementById('csecB');
+  var ar=document.getElementById('csecAr');
+  b.classList.toggle('sh');
+  ar.classList.toggle('op',b.classList.contains('sh'));
+}
+
+// ═══════════════════════════════════════════════════════
+// Standard
+// ═══════════════════════════════════════════════════════
+
+function onStd(){
+  var v=document.getElementById('stdSel').value;
+  var hs=v!=='';
+  document.getElementById('stdTag').classList.toggle('on',hs);
+  if(hs)document.getElementById('stdTag').textContent='📏 '+document.getElementById('stdSel').options[document.getElementById('stdSel').selectedIndex].text;
+  document.getElementById('stdTree').classList.toggle('sh',hs);
+  document.getElementById('noStdTree').classList.toggle('sh',!hs);
+  rC();
+}
+function togSt(){
+  var hs=document.getElementById('stdSel').value!=='';
+  if(hs)document.getElementById('stdTree').classList.toggle('sh');
+  else document.getElementById('noStdTree').classList.toggle('sh');
+}
+
+// ═══════════════════════════════════════════════════════
+// Reports
+// ═══════════════════════════════════════════════════════
+
+function rRpt(){
+  var q=(document.getElementById('rptSearch').value||'').toLowerCase();
+  var list=reports.filter(function(r){return (r.file||'').toLowerCase().indexOf(q)!==-1;});
+  var body=document.getElementById('rptBody');
+  document.getElementById('rptCnt').textContent=list.length;
+  if(!list.length){
+    body.innerHTML='<tr><td colspan="6" style="text-align:center;color:#484f58;padding:14px;">暂无匹配报告</td></tr>';
+    return;
+  }
+  body.innerHTML=list.map(function(r){
+    var aHtml=aSumHtml(r.aSum);
+    var tHtml=tSumHtml(r.tSum);
+    var tipData=buildTip(r);
+    return '<tr data-id="'+r.id+'" onclick="togRpt(\''+r.id+'\')"'
+      +' onmouseenter="shTip(event,this)" onmouseleave="hdTip()" onmousemove="mvTip(event)">'
+      +'<td class="fn">'+esc(r.file)+'</td>'
+      +'<td style="text-align:center;font-size:9px;">'+r.feat+'</td>'
+      +'<td>'+aHtml+'</td><td>'+tHtml+'</td>'
+      +'<td class="tm">'+r.time+'</td>'
+      +'<td onclick="event.stopPropagation()"><div class="btns">'
+      +'<button title="导出 HTML 报告" onclick="expRpt(\''+r.id+'\',\'html\')">📄</button>'
+      +'<button title="导出 Excel 违规明细" onclick="expRpt(\''+r.id+'\',\'excel\')">📊</button>'
+      +'<button title="导出 GeoJSON 违规图形" onclick="expRpt(\''+r.id+'\',\'geojson\')">🗺</button>'
+      +'</div></td></tr>'
+      +'<tr class="detail" id="det-'+r.id+'" style="display:none;"><td colspan="6"><div class="det">'
+      +detBox('📋 属性检查',r.attr,'attr')+detBox('🗺 拓扑检查',r.topo,'topo')
+      +'</div></td></tr>';
+  }).join('');
+}
+
+function aSumHtml(s){
+  if(!s||!s.t)return '<span class="na">—</span>';
+  return s.f===0?'<span class="ok">✓ '+s.p+'/'+s.t+'</span>':'<span class="bad">✗ '+s.f+' 条</span>';
+}
+function tSumHtml(s){
+  if(!s||!s.t)return '<span class="na">—</span>';
+  return s.f===0?'<span class="ok">✓ '+s.p+'/'+s.t+'</span>':'<span class="bad">✗ '+s.f+' 条</span>';
+}
+function detBox(title,rows,kind){
+  if(!rows||!rows.length)return '<div class="det-box"><div class="dt">'+title+'</div><div style="padding:6px 8px;color:#484f58;font-size:9px;">未执行</div></div>';
+  var trs=rows.map(function(v){
+    var cls=v.st==='pass'?'ok':'bad';
+    var stxt=v.st==='pass'?'✓ 通过':'✗ 不通过';
+    return '<tr><td style="color:#6e7681;">'+esc(v.code)+'</td><td>'+esc(v.name)+'</td><td class="'+cls+'">'+stxt+'</td>'
+      +'<td style="text-align:right;">'+v.chk+'</td><td style="text-align:right;color:#f85149;">'+v.fail+'</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+esc(v.msg)+'">'+esc(v.msg)+'</td></tr>';
+  }).join('');
+  return '<div class="det-box"><div class="dt">'+title+'</div>'
+    +'<table><thead><tr><th>规则</th><th>名称</th><th>状态</th><th>检查</th><th>失败</th><th>说明</th></tr></thead>'
+    +'<tbody>'+trs+'</tbody></table></div>';
+}
+
+// Detail expand
+function togRpt(id){
+  var tr=document.getElementById('det-'+id);
+  if(!tr)return;
+  var show=tr.style.display==='none';
+  tr.style.display=show?'':'none';
+  openRptId=show?id:null;
+}
+
+// Tooltip
+function buildTip(r){
+  var items=[];
+  (r.attr||[]).forEach(function(v){if(v.st!=='pass')items.push({k:'属性',t:v.name,c:v.fail});});
+  (r.topo||[]).forEach(function(v){if(v.st!=='pass')items.push({k:'拓扑',t:v.name,c:v.fail});});
+  return items;
+}
+function shTip(e,row){
+  var r=reports.find(function(x){return x.id===row.dataset.id;});
+  if(!r)return;
+  var items=buildTip(r);
+  if(!items.length)return;
+  var tip=document.getElementById('tip');
+  var h='<div class="tt">检查结果摘要</div>';
+  items.slice(0,6).forEach(function(i){
+    h+='<div class="row"><span class="k">['+i.k+']</span><span style="color:#c9d1d9;">'+esc(i.t)+'</span><span style="color:#f85149;margin-left:auto;">'+i.c+' 条</span></div>';
+  });
+  if(items.length>6)h+='<div class="row"><span class="k">... 等 '+items.length+' 项</span></div>';
+  tip.innerHTML=h;
+  tip.style.display='block';
+  mvTip(e);
+}
+function mvTip(e){
+  var tip=document.getElementById('tip');
+  if(tip.style.display==='none')return;
+  var x=e.clientX+12,y=e.clientY+8,w=tip.offsetWidth,h=tip.offsetHeight;
+  if(x+w>window.innerWidth-8)x=e.clientX-w-8;
+  if(y+h>window.innerHeight-8)y=e.clientY-h-8;
+  tip.style.left=x+'px';tip.style.top=y+'px';
+}
+function hdTip(){document.getElementById('tip').style.display='none';}
+
+// ═══════════════════════════════════════════════════════
+// Actions
+// ═══════════════════════════════════════════════════════
+
+function runCheck(){
+  var files=selCnt(),items=cntOn();
+  toast('已对 '+files+' 个文件执行 '+items+' 项检查...');
+  setTimeout(function(){
+    var first=reports[0];
+    toast('✓ 质检完成：'+first.file+' · '+first.feat+' 要素');
+  },1200);
+}
+function saveCfg(){toast('💾 质检方案已保存 (模拟)');}
+function expCfg(){toast('📤 质检配置已导出 (模拟)');}
+function expRpt(id,fmt){
+  var r=reports.find(function(x){return x.id===id;});
+  var n=r?r.file:'报告';
+  toast('📄 导出 '+n+' ('+fmt.toUpperCase()+') — 模拟下载');
+}
+
+function toast(msg){
+  var tip=document.getElementById('tip');
+  tip.innerHTML='<div class="tt">提示</div><div class="row"><span style="color:#c9d1d9;">'+esc(msg)+'</span></div>';
+  tip.style.display='block';
+  tip.style.left=(window.innerWidth/2-100)+'px';
+  tip.style.top='40px';
+  setTimeout(hdTip,1600);
+}
+
+// ═══════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════
+
+rF();rC();rRpt();document.getElementById('stdSel').value='';onStd();
+</script>
+</body>
+</html>
