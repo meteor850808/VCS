@@ -1,0 +1,198 @@
+# ────────────────────────────────────────────────────────────────────────────
+#  VCS 发布编排（基于「已发布镜像」，不本地构建）
+#  适用：内网离线（docker save/load 后）、生产发布、多架构镜像直接使用。
+#
+#  快速用法：
+#    # 方式一：命令行传参
+#    REGISTRY=docker.io NAMESPACE=meteor850808 TAG=2.24.0 \
+#      docker compose -f docker-compose.release.yml up -d
+#    # 方式二：写进 .env（REGISTRY / NAMESPACE / TAG）后
+#    docker compose -f docker-compose.release.yml up -d
+#
+#  与 docker-compose.yml 的区别：
+#    - 所有服务用 image:（无 build:），镜像来自 REGISTRY/NAMESPACE/vcs-*:TAG
+#    - 已内置生产要素：Nginx 反代(80/443 自签 TLS)、Docker secrets、
+#      资源限额、日志轮转；postgres/redis/api/flower 一律不外发端口
+#    - 可与本文件配套的 .env.prod.example 使用（敏感项在 secrets/*.txt）
+#
+#  前置：
+#    1) cp .env.prod.example .env         # 非敏感配置
+#    2) sh docker/scripts/gen_secrets.sh  # 生成 secrets/*.txt
+#    3) sh docker/scripts/gen_certs.sh    # 生成 certs/vcs.{crt,key}
+# ────────────────────────────────────────────────────────────────────────────
+
+x-app-common: &app-common
+  env_file: .env
+  environment: &app-env
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: ${POSTGRES_DB:-vcs_db}
+    POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
+    UPLOAD_DIR: /data/uploads
+    OUTPUT_DIR: /data/outputs
+    QUALITY_REPORT_DIR: /data/quality_reports
+    LOG_FILE: /data/logs/vcs.log
+  volumes:
+    - vector_uploads:/data/uploads
+    - vector_outputs:/data/outputs
+    - vector_reports:/data/quality_reports
+    - vector_logs:/data/logs
+  secrets:
+    - postgres_password
+    - admin_init_key
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+  deploy:
+    resources:
+      limits: { cpus: "4", memory: 4g }   # compose v2 非 Swarm 下需 `--compatibility` 才生效
+  restart: unless-stopped
+  networks:
+    - vcs_net
+
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:15-3.4-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vcs_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # 仅用 secret 文件来源；不设 POSTGRES_PASSWORD（官方镜像 file_env 二者并存会报错退出）
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - vcs_net
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - vcs_net
+
+  # ── 数据库迁移（一次性 Job）─────────────────────────────────────────────────
+  migrate:
+    <<: *app-common
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:?请设置 NAMESPACE（镜像命名空间）}/vcs-api:${TAG:-2.24.0}
+    environment:
+      <<: *app-env
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    command: ["sh", "-c", "alembic upgrade head && python scripts/init_db.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ── FastAPI 主服务 ────────────────────────────────────────────────────────────
+  api:
+    <<: *app-common
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:?请设置 NAMESPACE（镜像命名空间）}/vcs-api:${TAG:-2.24.0}
+    environment:
+      <<: *app-env
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Celery Worker（可水平扩展）────────────────────────────────────────────────
+  worker:
+    <<: *app-common
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:?请设置 NAMESPACE（镜像命名空间）}/vcs-worker:${TAG:-2.24.0}
+    environment:
+      <<: *app-env
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "4", memory: 4g }
+
+  # ── Celery Beat（定时调度）────────────────────────────────────────────────────
+  beat:
+    <<: *app-common
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:?请设置 NAMESPACE（镜像命名空间）}/vcs-beat:${TAG:-2.24.0}
+    environment:
+      <<: *app-env
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # ── Flower（Celery 监控 UI，默认不外发）───────────────────────────────────────
+  flower:
+    <<: *app-common
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:?请设置 NAMESPACE（镜像命名空间）}/vcs-flower:${TAG:-2.24.0}
+    secrets:
+      - flower_basic_auth            # 覆盖 app-common 的 secrets（Flower 仅需认证）
+    depends_on:
+      - redis
+
+  # ── Nginx 反代（80→301→443，自签 TLS）────────────────────────────────────────
+  nginx:
+    image: ${REGISTRY:-docker.io}/${NAMESPACE:?请设置 NAMESPACE（镜像命名空间）}/vcs-nginx:${TAG:-2.24.0}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    restart: unless-stopped
+    networks:
+      - vcs_net
+
+# ── Docker secrets（文件来源）─────────────────────────────────────────────────
+secrets:
+  postgres_password: { file: ./secrets/postgres_password.txt }
+  admin_init_key:    { file: ./secrets/admin_init_key.txt }
+  flower_basic_auth: { file: ./secrets/flower_basic_auth.txt }
+
+# ── 数据卷 ────────────────────────────────────────────────────────────────────
+volumes:
+  pg_data:
+  redis_data:
+  vector_uploads:
+  vector_outputs:
+  vector_reports:
+  vector_logs:
+
+# ── 网络 ──────────────────────────────────────────────────────────────────────
+networks:
+  vcs_net:
+    driver: bridge

@@ -1,6 +1,7 @@
 # VCS 空间质检 — 项目基准线文档
 
 > **维护规则**: 每次功能变更后，同步更新本文档对应章节。  
+> **最后更新**: 2026-10-19 · **v2.24.0 运维交付（Docker 操作手册 + 发布编排）**：新增《Docker 部署·使用·调试操作手册》（`docs/docker_ops_manual_v2_24_0.md`，覆盖架构/镜像获取三路径/配置/三种部署模式/日常运维/排障速查/数据备份恢复/升级回滚/安全/附录）+ 新增发布编排 `docker-compose.release.yml`（基于已发布镜像 `image:` 起服，内置 Nginx/TLS/secrets/端口收敛/migrate Job，`REGISTRY`/`NAMESPACE`/`TAG` 三变量切换仓库，支持离线 `save`/`load`）。
 > **最后更新**: 2026-10-16 · **v2.24.0 CI 双架构镜像构建与发布**：新增/完善 GitHub Actions 流水线——`docker-publish.yml` 用**原生 runner**（`linux/amd64`→`ubuntu-latest`、`linux/arm64`→`ubuntu-24.04-arm`）构建 5 个镜像（vcs-api/worker/beat/flower/nginx）并 `imagetools create` 合并为 **multi-arch manifest** 推送 Docker Hub；矩阵 = 2 runner × 5 镜像 = 10 build + merge-manifest。构建期修复：`libmdbodbc1`→`odbc-mdbtools`（驱动路径动态探测）、LibreDWG `configure --disable-python`（builder 补 `python3`）、curl 下载 `--retry*`；`ci.yml` 的 `prod-config` 纳入新增脚本 `bash -n`。首轮全绿（Run 38900892791，11/11）。详见 `docs/revision_v2_24_0.md` §9。
 > **最后更新**（历史）: 2026-10-13 · **v2.24.0 Docker 生产加固（Nginx 反代/自签 TLS + Docker secrets + entrypoint 派生连接串 + LibreDWG/mdbtools Linux 适配 + Flower/Beat 修复 + Makefile）**；（历史）2026-10-09 · **v2.23.0 Windows 离线一键部署子系统（deploy/）**：新增 `deploy/` 离线一键部署子系统——联网机 `build_bundle.ps1` 生成离线资源包（安装包 + Redis/LibreDWG 二进制 + 全量 wheel + 种子，逐文件 SHA-256 落 `offline/manifest.json`）→ 目标机 `deploy_offline.bat` 十二阶段编排安装（00_preflight 校验清单 / 10 Python / 20 PG / 21 PostGIS / 22 ACE [非关键] / 25 VC++ [非关键] / 30 Redis / 40 venv / 50 建库迁移 / 60 凭证+种子 / 90 起服 / 99 验证）；UAC 自提升、`--from N` 幂等续跑、`--dry-run` 干跑、失败分级 + `deploy/logs/` 日志、凭证（ADMIN_INIT_KEY/API_KEY）落 `deploy/.install_state.json`；旧 `deploy_windows.bat` 退役为薄封装转调 `deploy\deploy_offline.bat`。详见 `docs/revision_v2_23_0.md`。
 > **最后更新**（历史）: 2026-10-08 · **v2.22.3 CSV 无损归档往返 + 字段-字典绑定模板往返批次**：> ① **绑定随模板往返（A 方案，用户已确认）**：「字段定义」Sheet 新增第 10 列「字典编码」，多值分隔 `,，;；`/`|`/空白，保序去重，**首个编码落 `is_primary=True`**，未知编码跳过并告警；JSON 字段对象同构 `dict_codes`；`V2FieldDef` 增 `dict_codes` + 新增 `_split_dict_codes()`；导入侧 `pending_links` 待字典建完再统一建 `StandardFieldDictLink`；导出补关联列/键；**旧 9 列模板兼容**。闭环 v2.22.2 §17 留档的「绑定零覆盖」。② **CSV 升级为 A2-1 无损归档**（用户已确认）：`export_standard` / `template/csv` / `import_standard_csv` 三端统一为 **ZIP 归档** = `_manifest.json`（仅 `format`/`version`/`encoding`/`generator`/`roles`/`diagnostics`，**不含结构数据**）+ **6 个规范化角色 CSV**（`标准信息`/`层组`/`数据表`/`字段`/`字典`/`字典项`），全部 **UTF-8 with BOM**。**层组编码/表编码/字典编码为唯一连接键，行顺序即 `ordering`** → 归档不依赖服务端 id，跨环境往返结构不变。**被否的「一表一文件」**：表名在标准内不唯一（实测两个层组下各一张「路面」），文件名单独标识无法消歧，且装不下层组层级/表编码/字段类型/字典项/绑定。**被否的 manifest 存结构数据**：会产生「双源不一致」，用户改了 CSV 没改 JSON 时无从判断以谁为准。③ **CSV 也能带字典与绑定往返**（本版核心变化）：字典**拆两个文件**（合并表里同名字典会互相冲突）；**空字典也能表达**（Excel 侧 `if d.items` 会静默丢弃）；字段表比 Excel 多一列「默认值」，避免丢 `StandardField.default_value`。④ **保留 legacy 路径**：ZIP 内无 `_manifest.json` → 走「每文件一表、字段取首行、类型恒 string」旧行为，外部作者零破坏。⑤ **降级与容错**：`tables`/`fields` 缺席 400（静默建空标准没意义），其余可选角色未声明按空处理、声明却缺文件则告警；未知层组/父级/表/字典引用、重复编码、额外未声明文件、单元格容错**均告警而非失败**；角色文件非 UTF-8 → 400（静默按空 = 删数据）。⑥ **`标准信息.csv` 真正被消费**：`_archive_standard_meta` + `_merge_standard_meta` 恢复 `DataStandard.description/category`；**表单显式值优先**，归档仅作默认值来源；**名称永不覆盖**（它是 `update/upsert` 的目标解析键），冲突只告警。⑦ **修掉一个静默 bug**：`标准信息.csv` 原导出成「首格是表头文字 + 3 个数据值」的 **4 列形态且无表头行**，导入时整列错位一列 → 已修为 `[表头, [name, desc, category]]` 并加回归守卫。⑧ **`update/upsert` 保持全删重建**（`_common.py:315-322` `_delete_standard_children`）—— 既有的「模板为权威状态」语义。⑨ **新守卫**：`tests/test_imp_exp_dict_roundtrip.py` **76 例** + `tests/test_import_conflict_messages.py` **6 例** + `tests/test_excel_codeless_dict.py` **8 例** + `tests/test_version_snapshot_fidelity.py` **9 例** + `tests/test_csv_upload_edge_cases.py` **2 例**（无名文件上传 HTTP 层走不到，直测辅助函数），TDD 全程。⑩ 全量回归 **1778 passed**，覆盖 **100.00%**（11665 stmts / 0 miss，125 文件满覆盖）；前端契约 30 passed，Playwright **31/31**，`node --check app.js` OK；另加 `scripts/verify_csv_archive.py` 归档人工校验（独立库 `vcs_verify`，自动建/删，不碰 `vcs`/`vcs_test`）。
@@ -174,6 +175,7 @@
 │       └── docker-publish.yml # 双架构(amd64+arm64)镜像构建 + manifest 合并发布
 ├── docker-compose.yml       # 容器编排（基线）
 ├── docker-compose.prod.yml  # 生产覆盖层（Nginx/secrets/限额/日志；v2.24.0）
+├── docker-compose.release.yml # 发布编排（基于已发布镜像；离线/生产，含 Nginx/secrets；v2.24.0）
 ├── Dockerfile               # 多阶段构建（含 LibreDWG 源码构建阶段）
 ├── Makefile                 # 部署/证书/密钥 targets (v2.24.0)
 ├── .env.prod.example        # 生产 env 模板 (v2.24.0)
@@ -1086,6 +1088,7 @@ docs/
 ├── review_v2.16.0.md        # v2.16.0 审查报告
 ├── qc_redesign_v5.html      # 最终质检页设计原型（v2.6 实现依据）
 ├── stage_report_2026-09-01.md # 项目审查报告 + 清理日志 + 优化建议（2026-09-01）
+├── docker_ops_manual_v2_24_0.md # Docker 部署·使用·调试操作手册（v2.24.0）
 └── archive/                  # 历史归档（30 个文件）
     ├── revision_v2_*.md      # 各版本详细修订记录（12 个，均为 v2.22.0 之前）
     ├── technical_spec_*.md   # 技术方案（4 个）
@@ -1101,6 +1104,8 @@ docs/
         └── VCS_项目修订全纪录.md  VCS_优化实施记录.md
 ```
 
+> **v2.24.0 续**：主目录 revision 文档新增 `revision_v2_23_0.md`、`revision_v2_24_0.md`；并新增运维文档 `docker_ops_manual_v2_24_0.md`（Docker 部署·使用·调试操作手册）。
+>
 > **v2.22.3 续**：主目录 revision 文档新增 `revision_v2_22_3.md`，主目录 v2.19.0 起的修订记录现为 **16 个**；`archive/` 仍为 30 个文件（`archive/revision_v2_*` 的 12 个全部早于 v2.22.0，未变）。
 >
 > **v2.22.2 复核修正**：原清单称 revision 文档「均归档至 `archive/`（12 个）」且版本停在 v2.15.0，与实际不符 ——
@@ -1203,6 +1208,16 @@ base (python:3.11-slim)
 | worker | worker target (×2 replicas) | - | migrate, redis |
 | flower | flower target | 5555 | redis |
 | beat | base + celery beat | - | migrate, redis |
+
+### 部署编排（三种模式）
+
+| 编排文件 | 用途 | 镜像来源 |
+|----------|------|----------|
+| `docker-compose.yml` | 基线（开发/冒烟，端口全开） | 本地构建（`build`） |
+| `docker-compose.yml` + `docker-compose.prod.yml` | 生产覆盖层（Nginx/TLS/secrets/端口收敛/限额/日志轮转） | 本地构建（`build`） |
+| `docker-compose.release.yml` | 发布编排（独立可用；`REGISTRY`/`NAMESPACE`/`TAG` 切换仓库；支持离线 `save`/`load`） | 已发布镜像（`image`） |
+
+> 操作手册：`docs/docker_ops_manual_v2_24_0.md`（部署 / 使用 / 调试）。
 
 ### Docker 网络
 
