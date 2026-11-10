@@ -35,6 +35,24 @@ const S = {
 
 // ── Utils ─────────────────────────────────────────────────
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ── 评分渲染（唯一入口）──────────────────────────────────────────────────────
+// 口径与阈值只由后端决定：前端读 score_overall 与 verdict，不复写 85/60 之类的判断。
+const VERDICT_COLOR={pass:'var(--green)',warn:'var(--yellow)',fail:'var(--red)',not_evaluated:'var(--t2)'};
+/** 综合分 → {text, color}。score_overall 为空即「未评价」，不显示 0%。 */
+function scoreView(r){
+  r=r||{};
+  if(r.score_overall==null)return{text:'未评价',color:'var(--t2)'};
+  return{text:(r.score_overall*100).toFixed(1)+'%',color:VERDICT_COLOR[r.verdict]||'var(--t2)'};
+}
+/** 维度卡 → HTML。未评价（值缺失或 evaluated 明确为 false）显示「— · 未评价」。 */
+function dimCard(label,val,evaluated){
+  if(val==null||evaluated===false){
+    return`<div class="dp-dim"><div class="dp-dim-v" style="color:var(--t2);">—</div><div class="dp-dim-l">${esc(label)} · 未评价</div></div>`;
+  }
+  const pct=Math.round(val*100);
+  return`<div class="dp-dim" style="border-top-color:var(--accent);"><div class="dp-dim-v" style="color:var(--accent);">${pct}%</div><div class="dp-dim-l">${esc(label)}</div></div>`;
+}
 function toast(msg, t='info'){
   const w=document.getElementById('tc'), el=document.createElement('div');
   el.className=`toast ${t==='error'?'err':t==='success'?'ok':t==='warning'?'warn':'inf'}`;
@@ -1131,12 +1149,10 @@ async function rowQC(id,btn){
     const r=await fetch(S.base+'/api/v1/data/'+id+'/quality-check',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',...ah()},body});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'HTTP '+r.status);}
     const d=await r.json();
-    // v2.20: 综合分由后端按 WEIGHTS 计算返回 score_overall，前端不再硬编码权重
-    let score=d.score_overall!==undefined?d.score_overall:(d.completeness_score||0);
-    const sc=(score*100).toFixed(1);
-    const col=score>=.85?'var(--green)':score>=.6?'var(--yellow)':'var(--red)';
+    // 统一渲染：综合分读 score_overall，颜色由后端 verdict 决定
+    const v=scoreView(d);
     const el=document.getElementById('qs-'+id);
-    if(el)el.innerHTML=`<span style="font-family:var(--mono);font-size:12px;color:${col};">${sc}%</span>`;
+    if(el)el.innerHTML=`<span style="font-family:var(--mono);font-size:12px;color:${v.color};">${v.text}</span>`;
     if(div)div.innerHTML=`<span style="color:var(--green);">✓ 质检完成</span>`;
   }catch(e){if(div)div.innerHTML=`<span style="color:var(--red);">✗ ${esc(e.message)}</span>`;}
   btn.disabled=false;
@@ -1353,13 +1369,15 @@ async function loadDQC(){
     const reports=await GET('/api/v1/quality?page_size=50');
     if(!reports||!reports.length){el.innerHTML=scopePanel+'<div class="empty"><div class="ei">📋</div><p>暂无质检报告，请先执行质检</p></div>';return;}
     const r=reports[0];
-    const cls=r.completeness_score>=.85?'hi':r.completeness_score>=.6?'mid':'lo';
+    const v=scoreView(r);
+    const cls=r.verdict==='pass'?'hi':r.verdict==='fail'?'lo':'mid';
     // 【v2.10.5】报告圈定范围标签
     const clTag=r.checked_layers&&r.checked_layers.length
       ?`<div style="font-size:11px;color:var(--purple);margin-top:4px;">🎯 已检图层: ${r.checked_layers.map(esc).join('、')}</div>`:'';
-    el.innerHTML=`${scopePanel}<div class="qsr"><div class="qsb ${cls}">${(r.completeness_score*100).toFixed(1)}%</div>
+    const issues=r.violation_count!=null?r.violation_count:(r.issues_count||0);
+    el.innerHTML=`${scopePanel}<div class="qsr"><div class="qsb ${cls}" style="color:${v.color};">${v.text}</div>
       <div><div style="font-weight:600;">${esc(r.file_name)}</div><div style="font-size:12px;color:var(--t1);">${r.total_features} 要素 · ${r.total_fields} 字段</div>${clTag}</div></div>
-      <div style="font-size:12px;color:${(r.issues_count||0)>0?'var(--yellow)':'var(--green)'};">${(r.issues_count||0)>0?`⚠ ${r.issues_count} 个问题`:'✓ 未发现问题'}</div>
+      <div style="font-size:12px;color:${issues>0?'var(--yellow)':'var(--green)'};">${issues>0?`⚠ ${issues} 个问题`:'✓ 未发现问题'}</div>
       <div style="margin-top:14px;display:flex;gap:8px;">
         <button class="btn btn-p btn-sm" onclick="dlAuth('${S.base}/api/v1/quality/${r.id}/html','report.html')">HTML</button>
         <button class="btn btn-g btn-sm" onclick="dlAuth('${S.base}/api/v1/quality/${r.id}/json','report.json')">JSON</button>
@@ -1390,8 +1408,8 @@ async function runDQCScoped(){
     const r=await fetch(S.base+'/api/v1/data/'+_dFileId+'/quality-check',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',...ah()},body});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'HTTP '+r.status);}
     const d=await r.json();
-    const score=(d.score_overall||0)*100;  // v2.20: 使用后端综合分（WEIGHTS）
-    st.textContent=`✓ 完成 ${score.toFixed(1)}%（${sel.length} 图层）`;st.style.color='var(--green)';
+    const v=scoreView(d);  // 综合分与未评价状态统一由 scoreView 渲染
+    st.textContent=`✓ 完成 ${v.text}（${sel.length} 图层）`;st.style.color=v.color;
     toast(`范围质检完成（已检图层: ${sel.join('、')}）`,'success');
     loadDQC();
   }catch(e){st.textContent='✗ '+e.message;st.style.color='var(--red)';}
@@ -2264,16 +2282,12 @@ async function toggleQcDetail(id){
   panel.innerHTML='<div style="text-align:center;color:var(--t2);padding:20px;">加载中...</div>';
   try{
     const r=await GET('/api/v1/quality/'+id);
-    const overall=(r.score_overall||0)*100;  // v2.20: 使用后端综合分（WEIGHTS）
-    const overallColor=overall>=85?'var(--green)':overall>=60?'var(--yellow)':'var(--red)';
+    const v=scoreView(r);
+    const evaluated=r.evaluated||{};
 
-    // 【S5】五维评分卡片
-    const dims=[['完整性',r.score_completeness],['准确性',r.score_accuracy],['一致性',r.score_consistency],['唯一性',r.score_uniqueness],['拓扑',r.score_topology]];
-    const dimCards=dims.map(([l,v])=>{
-      const p=Math.round((v||0)*100);
-      const c=p>=85?'var(--green)':p>=60?'var(--yellow)':'var(--red)';
-      return`<div class="dp-dim" style="border-top-color:${c};"><div class="dp-dim-v" style="color:${c};">${p}%</div><div class="dp-dim-l">${l}</div></div>`;
-    }).join('');
+    // 【S5】五维评分卡片（未评价维度由 dimCard 显示「—」，不显示 0%）
+    const dims=[['完整性','completeness',r.score_completeness],['准确性','accuracy',r.score_accuracy],['一致性','consistency',r.score_consistency],['唯一性','uniqueness',r.score_uniqueness],['拓扑','topology',r.score_topology]];
+    const dimCards=dims.map(([l,k,val])=>dimCard(l,val,evaluated[k])).join('');
 
     // 【S5】严重度分布
     const sd=r.severity_dist||{};
@@ -2334,7 +2348,7 @@ async function toggleQcDetail(id){
 
     panel.innerHTML=`
       <div class="dp-header">
-        <div class="dp-score" style="background:${overallColor}15;color:${overallColor};">${Math.round(overall)}</div>
+        <div class="dp-score" style="background:${v.color}15;color:${v.color};font-size:${r.score_overall==null?'12px':'14px'};">${v.text}</div>
         <div class="dp-info">
           <div class="dp-name">${esc(r.file_name)}</div>
           <div class="dp-meta">${r.total_features||0} 要素 · ${ftm(r.created_at)}</div>
