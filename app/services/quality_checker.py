@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 WEIGHTS = {
     "completeness": 0.25,  # 必填项完整率
-    "accuracy": 0.25,      # 值域/类型正确率
+    "accuracy": 0.25,      # 属性值域正确率
     "consistency": 0.20,   # 属性结构一致性
     "uniqueness": 0.15,    # 主键唯一性
     "topology": 0.15,      # 拓扑合规率
@@ -52,8 +52,10 @@ DIMENSION_RULES: dict[str, frozenset[str]] = {
 
 # 照常执行、只作诊断的规则：不进任何维度分，但会进 violation 清单
 DIAGNOSTIC_RULES: frozenset[str] = frozenset({
-    "31010007", "31010008", "31010009",   # A7 必要图层不为空 / A8 字段长度 / A9 精度
-    "T06", "T07", "T08", "T09", "T10",    # 面重叠 / 点重叠 / 面裂隙 / 面合并 / 线连通性
+    # A7 必要图层不为空 / A8 字段值小数位 / A9 字段长度限制
+    "31010007", "31010008", "31010009",
+    # 面重叠 / 点重叠 / 线重叠 / 面裂隙 / 线连通性（单位与分母不同，不进拓扑分）
+    "T06", "T07", "T08", "T09", "T10",
 })
 
 
@@ -258,15 +260,30 @@ async def run_quality_check(
             "by_severity": {"error": 0, "warning": 0},
             "message": "文件无图形要素（feature_count=0），质检无法执行",
         }
+        if settings.scoring_profile == "v3":
+            # v3：没有可检要素 = 一维都没评价。不能伪造 0 分（也不能像 v2 那样
+            # 满分通过）；判定由 derive_verdict(None) 落到 not_evaluated。
+            scores = {
+                "completeness": None, "accuracy": None, "consistency": None,
+                "uniqueness": None, "topology": None, "overall": None,
+                "evaluated": {d: False for d in WEIGHTS},
+                "rule_pass_rate": 1.0,      # 无条目可计，按「无失败」的约定
+                "evaluation_errors": [],
+                "profile": "v3",
+            }
+        else:
+            # v2 回滚口径：保持既有行为（空结果 = 0 分，判 fail）
+            scores = {
+                "completeness": 0.0, "accuracy": 0.0, "consistency": 0.0,
+                "uniqueness": 0.0, "topology": 0.0, "overall": 0.0,
+                "profile": "v2",
+            }
         return {
             "attr_results": [],
             "attr_summary": dict(_empty),
             "topo_results": [],
             "topo_summary": dict(_empty),
-            "scores": {"completeness": 0.0, "accuracy": 0.0, "consistency": 0.0,
-                       "uniqueness": 0.0, "topology": 0.0, "overall": 0.0,
-                       # 口径标签如实记录，避免这行被当成 v2 历史数据统计
-                       "profile": settings.scoring_profile},
+            "scores": scores,
             "total_violations": 0,
             "violation_samples": [],
             "feature_count": 0,

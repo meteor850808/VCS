@@ -139,7 +139,9 @@ class TestRunQualityCheck:
         res = await qc.run_quality_check(db_session, "sid", sf.id, "key1")
         assert res["attr_results"] == []
         assert res["attr_summary"]["message"] == "文件无图形要素（feature_count=0），质检无法执行"
-        assert res["scores"]["overall"] == 0.0
+        # v3：没要素 = 一维都没评价 → 综合分为 None（未评价），不伪造 0 分
+        assert res["scores"]["overall"] is None
+        assert not any(res["scores"]["evaluated"].values())
         assert res["total_violations"] == 0
 
     async def test_file_missing_guard(self, db_session):

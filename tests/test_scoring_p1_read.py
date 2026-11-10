@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.api.v1.quality import _resolve_overall, _verdict_color
+from app.api.v1.quality import _resolve_overall, _verdict_color, _verdict_of
 
 
 def _legacy_report(**over):
@@ -46,6 +46,37 @@ class TestResolveOverall:
         r = _legacy_report()
         del r.scoring_profile
         assert _resolve_overall(r) == 1.0
+
+    def test_v2_row_with_all_dims_null_stays_none(self):
+        """五列全空且无 overall 的 v2 行（旧同步接口）→ 未评价，不伪造 0.0。"""
+        r = _legacy_report(
+            score_completeness=None, score_accuracy=None, score_consistency=None,
+            score_uniqueness=None, score_topology=None,
+        )
+        assert _resolve_overall(r) is None
+
+
+class TestVerdictOf:
+    """读路径的判定必须与写入端同源：都要带上 evaluation_errors。"""
+
+    def test_high_score_without_errors_is_pass(self):
+        assert _verdict_of(_legacy_report(score_overall=0.95)) == "pass"
+
+    def test_high_score_with_errors_stays_not_evaluated(self):
+        """B1：库里有 evaluation_errors 时，高分也不得显示为 pass。"""
+        r = _legacy_report(
+            score_overall=0.99,
+            evaluation_errors=[{"rule_code": "T03", "rule_name": "极大面", "message": "boom"}],
+        )
+        assert _verdict_of(r) == "not_evaluated"
+
+    def test_missing_overall_is_not_evaluated(self):
+        assert _verdict_of(_legacy_report(scoring_profile="v3")) == "not_evaluated"
+
+    def test_missing_errors_column_defaults_to_empty(self):
+        """Task 8 之前 ORM 没有 evaluation_errors 列，getattr 必须兜底空列表。"""
+        r = _legacy_report(score_overall=0.95)   # 无 evaluation_errors 属性
+        assert _verdict_of(r) == "pass"
 
 
 class TestVerdictColor:

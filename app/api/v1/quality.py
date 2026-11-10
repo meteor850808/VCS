@@ -77,20 +77,33 @@ def _resolve_overall(report) -> float | None:
     """统一读路径：库里的综合分优先，历史 v2 行兜底重算，v3 无分值返回 None。
 
     - `score_overall` 非空 → 直接用（四舍五入 4 位）
-    - `score_overall` 为空且 `scoring_profile` 是 "v2" → 用五列按 WEIGHTS 兜底
-    - 其它（v3 全维度未评价 / 异常）→ None，让调用方显示「未评价」而不是 0%
+    - `score_overall` 为空且 `scoring_profile` 是 "v2" 且五列至少有一个非空
+      → 用五列按 WEIGHTS 兜底（v2.5 起写入的 v2 行五列齐全）
+    - 其它（v3 全维度未评价 / 五列全空的兼容分支 / 异常）→ None，
+      让调用方显示「未评价」而不是伪造 0%
     """
     if report.score_overall is not None:
         return round(report.score_overall, 4)
-    if getattr(report, "scoring_profile", "v2") == "v2":
-        return _overall_from_scores(
-            report.score_completeness or 0.0,
-            report.score_accuracy or 0.0,
-            report.score_consistency or 0.0,
-            report.score_uniqueness or 0.0,
-            report.score_topology or 0.0,
-        )
+    dims = (
+        report.score_completeness, report.score_accuracy,
+        report.score_consistency, report.score_uniqueness, report.score_topology,
+    )
+    if getattr(report, "scoring_profile", "v2") == "v2" and any(d is not None for d in dims):
+        return _overall_from_scores(*(d if d is not None else 0.0 for d in dims))
     return None
+
+
+def _verdict_of(report) -> str:
+    """统一判定读路径：必须带上库里的 `evaluation_errors`。
+
+    写入端用 `derive_verdict(overall, evaluation_errors)` 判过；读路径若只传
+    overall，含异常规则的报告会从 `not_evaluated` 变成 `pass`/`warn`/`fail`，
+    把不可信的分数当成合格展示。
+    """
+    return derive_verdict(
+        _resolve_overall(report),
+        getattr(report, "evaluation_errors", None) or [],
+    )
 
 
 def _verdict_color(verdict: str) -> str:
@@ -474,6 +487,8 @@ async def quality_check_upload(
         data_standard_id=result.data_standard_id,
         html_report_path=html_path,
         json_report_path=json_path,
+        # 旧同步接口不产五维分，口径按 v2 如实标注；五列全空 → 读路径返回 None
+        scoring_profile="v2",
     )
     db.add(report)
     await db.commit()
@@ -496,7 +511,9 @@ async def quality_check_upload(
         json_report_path=report.json_report_path,
         checked_layers=report.checked_layers,
         created_at=report.created_at,
-        score_overall=report.score_overall or 0.0,  # 旧接口无五维分数列
+        # 旧接口无五维分数列：综合分与判定如实为「未评价」，不伪造 0 分
+        score_overall=report.score_overall,
+        verdict=_verdict_of(report),
     )
 
 
@@ -589,11 +606,11 @@ async def get_quality_report(
         stored_file_id=report.stored_file_id,
         attribute_summary=report.attribute_summary,
         topology_summary=report.topology_summary,
-        score_completeness=report.score_completeness or 0.0,
-        score_accuracy=report.score_accuracy or 0.0,
-        score_consistency=report.score_consistency or 0.0,
-        score_uniqueness=report.score_uniqueness or 0.0,
-        score_topology=report.score_topology or 0.0,
+        score_completeness=report.score_completeness,
+        score_accuracy=report.score_accuracy,
+        score_consistency=report.score_consistency,
+        score_uniqueness=report.score_uniqueness,
+        score_topology=report.score_topology,
         html_report_path=report.html_report_path,
         json_report_path=report.json_report_path,
         checked_layers=report.checked_layers,
@@ -604,9 +621,10 @@ async def get_quality_report(
         violation_samples=[ViolationSample(**s) for s in violation_samples],
         severity_dist=severity_dist,
         score_overall=overall,
-        verdict=derive_verdict(overall),
+        # 判定必须带上库里的 evaluation_errors（写入端就是按它判的）
+        verdict=_verdict_of(report),
         scoring_profile=getattr(report, "scoring_profile", "v2"),
-        # Task 8 之后 ORM 才有这两列；getattr 兜底让读路径先于迁移可用
+        # 0014 迁移是读这两列的硬前置（列已映射，未迁移会直接报缺列）
         evaluated=getattr(report, "score_evaluated", None) or {},
         evaluation_errors=getattr(report, "evaluation_errors", None) or [],
     )
@@ -630,7 +648,7 @@ async def get_quality_report_html(
 
     # 从数据库数据即时生成 HTML 报告（不依赖磁盘文件）
     overall = _resolve_overall(report)          # float | None，0..1 量纲
-    verdict = derive_verdict(overall)
+    verdict = _verdict_of(report)
     evaluated_map = getattr(report, "score_evaluated", None) or {}
 
     # 【S5】SVG 环形仪表（内联，零 CDN）
@@ -845,15 +863,15 @@ async def list_quality_reports(
             total_fields=r.total_fields,
             issues_count=violation_count,  # deprecated 字段，保留兼容：与 violation_count 同值
             created_at=r.created_at,
-            # v2.5 五维评分
-            score_completeness=r.score_completeness or 0.0,
-            score_accuracy=r.score_accuracy or 0.0,
-            score_consistency=r.score_consistency or 0.0,
-            score_uniqueness=r.score_uniqueness or 0.0,
-            score_topology=r.score_topology or 0.0,
+            # v2.5 五维评分（v3 未评价的维度为 NULL，不得就地转成 0.0）
+            score_completeness=r.score_completeness,
+            score_accuracy=r.score_accuracy,
+            score_consistency=r.score_consistency,
+            score_uniqueness=r.score_uniqueness,
+            score_topology=r.score_topology,
             # v3 口径元数据
             score_overall=overall,
-            verdict=derive_verdict(overall),
+            verdict=_verdict_of(r),
             scoring_profile=getattr(r, "scoring_profile", "v2"),
             violation_count=violation_count,
             # 违规明细

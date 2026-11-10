@@ -79,7 +79,7 @@ class CheckSummary(BaseModel):
 class DimensionScores(BaseModel):
     """五维评分（v3：未评价的维度为 None，不是 0.0）。"""
     completeness: float | None = Field(None, ge=0, le=1, description="必填项完整率")
-    accuracy: float | None = Field(None, ge=0, le=1, description="值域/类型正确率")
+    accuracy: float | None = Field(None, ge=0, le=1, description="属性值域正确率")
     consistency: float | None = Field(None, ge=0, le=1, description="属性结构一致性")
     uniqueness: float | None = Field(None, ge=0, le=1, description="主键唯一性")
     topology: float | None = Field(None, ge=0, le=1, description="拓扑合规率")
@@ -138,7 +138,7 @@ class QualityReportBrief(BaseModel):
     id: str
     file_name: str
     detected_format: str
-    completeness_score: float
+    completeness_score: float | None = None   # v3 未评价时为 None
     total_features: int
     total_fields: int
     # deprecated: 旧语义=结果条目数；新语义见 violation_count
@@ -178,7 +178,7 @@ class QualityReportDetail(BaseModel):
     detected_format: str
     total_features: int
     total_fields: int
-    completeness_score: float
+    completeness_score: float | None = None   # 旧单维完整率；v3 未评价时为 None
     missing_fields: list | None = None
     null_value_counts: dict | None = None
     critical_fields_status: dict | None = None

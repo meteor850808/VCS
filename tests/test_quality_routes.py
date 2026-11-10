@@ -350,6 +350,48 @@ class TestQualityDetail:
         topo_smpl = [s for s in samples if s["rule_code"].startswith("32")]
         assert any(s["feature_index"] == 3 for s in topo_smpl)
 
+    async def test_detail_keeps_not_evaluated_when_rule_errored(self, client, db_session):
+        """B1：库里有 evaluation_errors 时，读路径必须仍判 not_evaluated。
+
+        写入端是 `derive_verdict(overall, evaluation_errors)`；读路径若只传 overall，
+        含异常规则的报告刷新一次就会从 `not_evaluated` 变成 `pass`，把不可信的分数
+        当成合格展示。
+        """
+        raw, key = await _create_key(db_session, "qc_err")
+        report = QualityReport(
+            api_key_id=key.id,
+            file_name="err.geojson",
+            detected_format="stored_file",
+            total_features=5,
+            total_fields=0,
+            completeness_score=None,          # v3 未评价
+            score_completeness=0.99,
+            score_overall=0.99,
+            scoring_profile="v3",
+            score_evaluated={"completeness": True},
+            evaluation_errors=[
+                {"rule_code": "T03", "rule_name": "极大面", "message": "boom"}
+            ],
+        )
+        db_session.add(report)
+        await db_session.flush()
+        await db_session.commit()
+
+        resp = await client.get(
+            f"/api/v1/quality/{report.id}", headers={"X-API-Key": raw}
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["score_overall"] == pytest.approx(0.99)
+        assert body["verdict"] == "not_evaluated"          # 不得因分数高而降级为 pass
+        assert body["evaluation_errors"][0]["rule_code"] == "T03"
+        assert body["completeness_score"] is None          # B2：NULL 不得被读成 0.0
+
+        # 列表走同一入口，必须给出一致的判定
+        lst = await client.get("/api/v1/quality", headers={"X-API-Key": raw})
+        item = [r for r in lst.json() if r["id"] == report.id][0]
+        assert item["verdict"] == "not_evaluated"
+
     async def test_get_report_detail_not_found(self, client, db_session):
         raw, key = await _create_key(db_session, "qc_detail_404")
         resp = await client.get("/api/v1/quality/nope", headers={"X-API-Key": raw})
