@@ -386,7 +386,10 @@ async def run_topology_checks(
     # ── T1: 空几何 ────────────────────────────────────────────────────
     if "empty_geometry" in active_rules:
         total_empty = 0
+        # 分母 = 参与检查的要素总数（各几何类型之和，与 counts 同一查询口径）
+        total_rows = 0
         for gtype in check_models:
+            total_rows += counts.get(gtype, 0)
             model = MODEL_MAP[gtype]
             q = select(func.count()).select_from(model).where(
                 model.stored_file_id == stored_file_id,
@@ -398,7 +401,8 @@ async def run_topology_checks(
             total_empty += empty_count
         results.append(_make_result(
             "empty_geometry", status="fail" if total_empty > 0 else "pass",
-            failed_count=total_empty, message=f"发现 {total_empty} 条空几何" if total_empty else "无空几何",
+            failed_count=total_empty, total_checked=total_rows,
+            message=f"发现 {total_empty} 条空几何" if total_empty else "无空几何",
         ))
 
     # ── T2: 自相交 (shapely 混合) ────────────────────────────────────
@@ -781,6 +785,9 @@ async def run_topology_checks(
         if layer_filter:
             q = q.where(_lc(PolygonFeature))
         rows = (await db.execute(q)).all()
+        analyzed = len(rows[:5000])  # 限制分析量
+        # 总行数超过上限时分母被截断，失败率不能直接外推为要素级比例
+        scope = "truncated" if len(rows) > 5000 else "full"
         irregular_count = 0
         irregular_indices = []
         for r in rows[:5000]:  # 限制分析量
@@ -811,14 +818,16 @@ async def run_topology_checks(
             results.append(_make_result(
                 "irregular_polygon", status="fail",
                 failed_count=irregular_count,
-                total_checked=min(len(rows), 5000),
+                total_checked=analyzed,
+                denominator_scope=scope,
                 message=f"发现 {irregular_count} 个不规则面 (边数<{min_sides} 或凸度<{conv_thresh})",
                 feature_indices=irregular_indices[:500],
             ))
         else:
             results.append(_make_result(
                 "irregular_polygon", status="pass",
-                total_checked=min(len(rows), 5000),
+                total_checked=analyzed,
+                denominator_scope=scope,
                 message=f"无不规则面 (最少边数: {min_sides}, 凸度阈值: {conv_thresh})",
             ))
 

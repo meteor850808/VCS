@@ -255,6 +255,7 @@ async def run_attribute_checks(
         results.append(CheckResult(
             rule_code="31010001", rule_name="必要图层检查",
             status="pass", severity="error",
+            failed_count=0, total_checked=len(expected_table_names),
             message=f"文件已关联标准表 '{next(iter(expected_table_names), '')}'，图层检查通过",
         ))
     else:
@@ -263,6 +264,7 @@ async def run_attribute_checks(
             results.append(CheckResult(
                 rule_code="31010001", rule_name="必要图层检查",
                 status="fail", severity="error",
+                failed_count=len(missing_layers), total_checked=len(expected_table_names),
                 expected=f"需要: {sorted(expected_table_names)}",
                 actual=f"实际: {sorted(actual_layer_names)}",
                 message=f"缺失必要图层: {sorted(missing_layers)}",
@@ -271,6 +273,7 @@ async def run_attribute_checks(
             results.append(CheckResult(
                 rule_code="31010001", rule_name="必要图层检查",
                 status="pass", severity="error",
+                failed_count=0, total_checked=len(expected_table_names),
                 message=f"所有 {len(expected_table_names)} 个必要图层均存在",
             ))
 
@@ -301,6 +304,7 @@ async def run_attribute_checks(
                 results.append(CheckResult(
                     rule_code="31010002", rule_name="要素类型正确性",
                     status="fail", severity="error", layer=tname,
+                    failed_count=1, total_checked=1,
                     expected=std_table.geometry_type,
                     actual=str(sorted(wrong_geom)),
                     message=f"图层 '{tname}' 要素类型不匹配: 期望 {std_table.geometry_type}, 实际 {wrong_geom}",
@@ -309,6 +313,7 @@ async def run_attribute_checks(
                 results.append(CheckResult(
                     rule_code="31010002", rule_name="要素类型正确性",
                     status="pass", severity="error", layer=tname,
+                    failed_count=0, total_checked=1,
                     message=f"图层 '{tname}' 要素类型正确",
                 ))
 
@@ -330,6 +335,7 @@ async def run_attribute_checks(
             results.append(CheckResult(
                 rule_code="31010003", rule_name="属性结构正确性",
                 status="fail", severity="warning", layer=tname,
+                failed_count=1, total_checked=1,
                 expected=f"标准字段: {sorted(std_field_names)}",
                 actual=f"实际字段: {sorted(actual_field_names)}",
                 message=f"图层 '{tname}' {'; '.join(parts)}",
@@ -338,6 +344,7 @@ async def run_attribute_checks(
             results.append(CheckResult(
                 rule_code="31010003", rule_name="属性结构正确性",
                 status="pass", severity="warning", layer=tname,
+                failed_count=0, total_checked=1,
                 message=f"图层 '{tname}' 属性结构完整",
             ))
 
