@@ -58,17 +58,28 @@ class QualityReport(Base):
         JSON, nullable=True,
         comment="质检圈定的图层名列表（v2.10.5）；NULL=全部图层",
     )
-    # ── 新增：五维评分 ──
-    score_completeness: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    score_accuracy: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    score_consistency: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    score_uniqueness: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    score_topology: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # ── 新增：五维评分（v3 起可为 NULL：NULL=该维度本轮未评价，不是 0 分）──
+    score_completeness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_uniqueness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_topology: Mapped[float | None] = mapped_column(Float, nullable=True)
     # v2.20: 五维加权综合分（唯一来源 quality_checker.WEIGHTS；列在库中早已存在，
     # 此前从未写入/映射。无默认值——存量行保持 NULL → 读取时按 WEIGHTS 即时重算）
     score_overall: Mapped[float | None] = mapped_column(
         Float, nullable=True,
         comment="v2.20 五维加权综合分（quality_checker.WEIGHTS）",
+    )
+    # ── v3 口径元数据 ──
+    scoring_profile: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="v2", server_default="v2",
+        comment="口径版本：v2=条目通过率，v3=要素级派生",
+    )
+    score_evaluated: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, comment="{维度: 是否已评价}",
+    )
+    evaluation_errors: Mapped[list | None] = mapped_column(
+        JSON, nullable=True, comment="规则执行异常清单",
     )
     html_report_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     json_report_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
