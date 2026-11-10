@@ -46,6 +46,7 @@ class CheckItemResult(BaseModel):
     layer: str | None = None
     failed_count: int = 0
     total_checked: int = 0
+    denominator_scope: str = "full"
     expected: Any = None
     actual: Any = None
     message: str = ""
@@ -60,6 +61,7 @@ class TopoCheckItemResult(BaseModel):
     severity: str
     failed_count: int = 0
     total_checked: int = 0
+    denominator_scope: str = "full"
     message: str = ""
     feature_indices: list[int] = Field(default_factory=list)
     pairs: list[list[int]] = Field(default_factory=list)
@@ -75,13 +77,16 @@ class CheckSummary(BaseModel):
 
 
 class DimensionScores(BaseModel):
-    """五维评分。"""
-    completeness: float = Field(0.0, ge=0, le=1, description="必填项完整率")
-    accuracy: float = Field(0.0, ge=0, le=1, description="值域/类型正确率")
-    consistency: float = Field(0.0, ge=0, le=1, description="属性结构一致性")
-    uniqueness: float = Field(0.0, ge=0, le=1, description="主键唯一性")
-    topology: float = Field(0.0, ge=0, le=1, description="拓扑合规率")
-    overall: float = Field(0.0, ge=0, le=1, description="加权综合分")
+    """五维评分（v3：未评价的维度为 None，不是 0.0）。"""
+    completeness: float | None = Field(None, ge=0, le=1, description="必填项完整率")
+    accuracy: float | None = Field(None, ge=0, le=1, description="值域/类型正确率")
+    consistency: float | None = Field(None, ge=0, le=1, description="属性结构一致性")
+    uniqueness: float | None = Field(None, ge=0, le=1, description="主键唯一性")
+    topology: float | None = Field(None, ge=0, le=1, description="拓扑合规率")
+    overall: float | None = Field(None, ge=0, le=1, description="加权综合分")
+    # v3 口径元数据
+    evaluated: dict[str, bool] = Field(default_factory=dict, description="{维度: 是否已评价}")
+    rule_pass_rate: float = Field(1.0, ge=0, le=1, description="条目通过率（诊断字段，不进综合分）")
 
 
 class ViolationSample(BaseModel):
@@ -114,6 +119,12 @@ class QualityCheckResponse(BaseModel):
     total_violations: int = 0
     violation_samples: list[ViolationSample] = Field(default_factory=list)
 
+    # v3 口径元数据
+    verdict: str = "not_evaluated"
+    scoring_profile: str = "v2"
+    violation_count: int = 0
+    evaluation_errors: list[dict] = Field(default_factory=list)
+
     # 【v2.10.5】质检圈定的图层清单（NULL=全部图层）
     checked_layers: list[str] | None = None
 
@@ -130,14 +141,20 @@ class QualityReportBrief(BaseModel):
     completeness_score: float
     total_features: int
     total_fields: int
+    # deprecated: 旧语义=结果条目数；新语义见 violation_count
     issues_count: int = 0
     created_at: datetime
-    # v2.5 五维评分
-    score_completeness: float = 0.0
-    score_accuracy: float = 0.0
-    score_consistency: float = 0.0
-    score_uniqueness: float = 0.0
-    score_topology: float = 0.0
+    # v2.5 五维评分（v3：未评价为 None）
+    score_completeness: float | None = None
+    score_accuracy: float | None = None
+    score_consistency: float | None = None
+    score_uniqueness: float | None = None
+    score_topology: float | None = None
+    # v3 口径元数据
+    score_overall: float | None = None
+    verdict: str = "not_evaluated"
+    scoring_profile: str = "v2"
+    violation_count: int = 0
     # 违规明细（前端图表/筛选需要）
     constraint_violations: list | None = None
     topology_violations: list | None = None
@@ -174,13 +191,18 @@ class QualityReportDetail(BaseModel):
     # 新增五维评分
     attribute_summary: dict | None = None
     topology_summary: dict | None = None
-    score_completeness: float = 0.0
-    score_accuracy: float = 0.0
-    score_consistency: float = 0.0
-    score_uniqueness: float = 0.0
-    score_topology: float = 0.0
+    score_completeness: float | None = None
+    score_accuracy: float | None = None
+    score_consistency: float | None = None
+    score_uniqueness: float | None = None
+    score_topology: float | None = None
     # v2.20: 综合分（前端不再自行按权重硬编码计算；唯一来源 quality_checker.WEIGHTS）
-    score_overall: float = 0.0
+    # v3：全部维度未评价时为 None，不得写 0.0
+    score_overall: float | None = None
+    # v3 口径元数据
+    scoring_profile: str = "v2"
+    evaluated: dict[str, bool] = Field(default_factory=dict)
+    evaluation_errors: list[dict] = Field(default_factory=list)
     html_report_path: str | None = None
     json_report_path: str | None = None
     # 【v2.10.5】质检圈定的图层清单（NULL=全部图层）
