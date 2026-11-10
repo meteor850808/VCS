@@ -546,7 +546,7 @@
 | score_accuracy | Float | DEFAULT 0.0 | 准确性 |
 | score_consistency | Float | DEFAULT 0.0 | 一致性 |
 | score_uniqueness | Float | DEFAULT 0.0 | 唯一性 |
-| score_topology | Float | DEFAULT 0.0 | 拓扑(及时性) |
+| score_topology | Float | DEFAULT 0.0 | 拓扑 |
 | completeness_score | Float | DEFAULT 1.0 | 完整性得分(旧) |
 | missing_fields / null_value_counts | JSON | | 缺失统计 |
 | critical_fields_status | JSON | | 关键字段状态 |
