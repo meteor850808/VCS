@@ -2501,6 +2501,10 @@ async def check_stored_file_quality(
         score_uniqueness=scores["uniqueness"],
         score_topology=scores["topology"],
         score_overall=scores["overall"],
+        # v3 口径元数据
+        scoring_profile=scores.get("profile", "v2"),
+        score_evaluated=scores.get("evaluated"),
+        evaluation_errors=scores.get("evaluation_errors") or None,
         json_report_path=json_path,
     )
     db.add(report)
@@ -2531,8 +2535,8 @@ async def check_stored_file_quality(
         json_report_path=report.json_report_path,
         checked_layers=report.checked_layers,
         created_at=report.created_at,
-        # v3 派生字段（P1：scoring_profile 暂为 v2，P3 改读 scores["profile"]）
-        verdict=derive_verdict(scores["overall"]),
-        scoring_profile="v2",
+        # v3 派生字段
+        verdict=derive_verdict(scores["overall"], scores.get("evaluation_errors")),
+        scoring_profile=scores.get("profile", "v2"),
         violation_count=check_result["violation_count"],
     )
