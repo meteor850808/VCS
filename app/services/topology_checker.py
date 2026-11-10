@@ -67,6 +67,8 @@ class TopologyCheckResult:
     subtype: str = ""       # max_area / min_area / etc.
     failed_count: int = 0
     total_checked: int = 0
+    # v3：分母口径。full=全量检查；truncated=分母被截断（见 _make_result）
+    denominator_scope: str = "full"
     message: str = ""
     feature_indices: list[int] = field(default_factory=list)
     pairs: list[tuple[int, int]] = field(default_factory=list)
@@ -890,9 +892,14 @@ def _make_result(
     message: str = "",
     feature_indices: list[int] | None = None,
     pairs: list[tuple[int, int]] | None = None,
+    denominator_scope: str = "full",
     **kwargs,
 ) -> TopologyCheckResult:
-    """快捷构造 TopologyCheckResult。"""
+    """快捷构造 TopologyCheckResult。
+
+    `denominator_scope` 必须是显式形参：若靠 `**kwargs` 传，它会被塞进
+    `detail` 字典而不是字段，v3 的要素级派生就读不到分母口径。
+    """
     code, name, severity = ALL_RULES.get(rule_code, ("T??", rule_code, "warning"))
     return TopologyCheckResult(
         rule_code=code,
@@ -901,6 +908,7 @@ def _make_result(
         severity=severity if status == "fail" else "info",
         failed_count=failed_count,
         total_checked=total_checked,
+        denominator_scope=denominator_scope,
         message=message,
         feature_indices=feature_indices or [],
         pairs=pairs or [],
