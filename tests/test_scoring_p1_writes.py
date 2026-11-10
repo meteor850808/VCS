@@ -107,3 +107,43 @@ class TestRunQualityCheckDerivedFields:
 
         assert res["violation_count"] == 2
         assert res["total_violations"] == 14
+
+
+class TestNullScoresPersist:
+    """B2：v3 的「未评价」必须真的落成 NULL，不能被列默认值改成 0.0 / 1.0。"""
+
+    async def test_completeness_score_null_round_trips(self, db_session):
+        """`completeness_score` 曾是 `NOT NULL DEFAULT 1.0`：显式传 None 会被写成 1.0。"""
+        from app.models.quality_report import QualityReport
+
+        report = QualityReport(
+            file_name="empty.geojson",
+            detected_format="stored_file",
+            completeness_score=None,
+            scoring_profile="v3",
+        )
+        db_session.add(report)
+        await db_session.flush()
+        await db_session.refresh(report)
+
+        assert report.completeness_score is None
+        assert report.score_completeness is None
+        assert report.score_overall is None
+
+    async def test_five_dimension_scores_null_round_trip(self, db_session):
+        from app.models.quality_report import QualityReport
+
+        report = QualityReport(
+            file_name="nostd.geojson",
+            detected_format="stored_file",
+            scoring_profile="v3",
+            score_completeness=None, score_accuracy=None, score_consistency=None,
+            score_uniqueness=None, score_topology=None, score_overall=None,
+        )
+        db_session.add(report)
+        await db_session.flush()
+        await db_session.refresh(report)
+
+        for name in ("score_completeness", "score_accuracy", "score_consistency",
+                     "score_uniqueness", "score_topology", "score_overall"):
+            assert getattr(report, name) is None

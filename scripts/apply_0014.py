@@ -11,7 +11,9 @@
   1. quality_reports 增加 scoring_profile（varchar(8) NOT NULL DEFAULT 'v2'）
   2. 增加 score_evaluated（jsonb，可空）
   3. 增加 evaluation_errors（jsonb，可空）
-  4. 五个 score_* 列 DROP NOT NULL（NULL = 该维度本轮未评价，不是 0 分）
+  4. 五个 score_* 列与旧单维 completeness_score 共六列 DROP NOT NULL
+     （NULL = 该维度本轮未评价，不是 0 分；completeness_score 若保持
+     NOT NULL DEFAULT 1.0，会把「未评价」静默写成 100% 完整）
 
 用法:
     python scripts/apply_0014.py --dry-run   # 只读：报告当前结构与待执行动作
@@ -42,7 +44,10 @@ SCORE_COLS = (
     "score_topology",
 )
 
-# 顺序固定：先加列（有默认值，存量行自动填 v2），再放宽五列可空
+# 需要放宽为可空的列：五维 + 旧单维完整率（与 score_completeness 同源）
+NULLABLE_COLS = SCORE_COLS + ("completeness_score",)
+
+# 顺序固定：先加列（有默认值，存量行自动填 v2），再放宽评分列可空
 DDL = [
     (
         "add scoring_profile",
@@ -59,16 +64,18 @@ DDL = [
     ),
 ] + [
     (f"relax {col}", f"ALTER TABLE quality_reports ALTER COLUMN {col} DROP NOT NULL")
-    for col in SCORE_COLS
+    for col in NULLABLE_COLS
 ]
 
 _STATE_SQL = text(
     """
     SELECT column_name, is_nullable, data_type, column_default
     FROM information_schema.columns
-    WHERE table_name = 'quality_reports'
+    WHERE table_schema = current_schema()
+      AND table_name = 'quality_reports'
       AND column_name IN (
         'scoring_profile', 'score_evaluated', 'evaluation_errors',
+        'completeness_score',
         'score_completeness', 'score_accuracy', 'score_consistency',
         'score_uniqueness', 'score_topology'
       )
@@ -93,7 +100,7 @@ def verify(db) -> list[str]:
     for name in ("scoring_profile", "score_evaluated", "evaluation_errors"):
         if name not in state:
             problems.append(f"缺少列 {name}")
-    for name in SCORE_COLS:
+    for name in NULLABLE_COLS:
         if name not in state:
             problems.append(f"缺少列 {name}")
         elif state[name][0] != "YES":
@@ -113,7 +120,7 @@ def main() -> int:
         before = show_state(db)
         pending = [
             label for label, sql in DDL
-            # 五列的 DROP NOT NULL 在已是可空时无需重跑；加列用 IF NOT EXISTS 自带幂等
+            # DROP NOT NULL 在已是可空时无需重跑；加列用 IF NOT EXISTS 自带幂等
             if not _already_done(label, before)
         ]
         if not pending:

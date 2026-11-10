@@ -33,7 +33,8 @@ class QualityReport(Base):
     detected_format: Mapped[str] = mapped_column(String(64), nullable=False)
     total_features: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_fields: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    completeness_score: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    # 旧单维完整率：与 score_completeness 同源同病，v3 未评价时必须为 NULL 而不是默认 1.0
+    completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     missing_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
     null_value_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     critical_fields_status: Mapped[dict | None] = mapped_column(JSON, nullable=True)
