@@ -203,6 +203,8 @@ class QualityReportDetail(BaseModel):
     scoring_profile: str = "v2"
     evaluated: dict[str, bool] = Field(default_factory=dict)
     evaluation_errors: list[dict] = Field(default_factory=list)
+    # 派生判定（不落库，读路径即时计算）
+    verdict: str = "not_evaluated"
     html_report_path: str | None = None
     json_report_path: str | None = None
     # 【v2.10.5】质检圈定的图层清单（NULL=全部图层）

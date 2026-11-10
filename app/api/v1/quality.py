@@ -46,6 +46,7 @@ from app.schemas.quality import (
 )
 from app.services.quality_checker import run_quality_check, check_quality
 from app.services.quality_checker import WEIGHTS  # 五维权重唯一权威来源
+from app.services.quality_checker import derive_verdict  # 判定唯一来源
 from app.services.quality_checker import generate_html_report, generate_json_report  # noqa: F401
 from app.services.topology_checker import TopologyConfig
 from app.services.quality_exporter import export_violations_geojson, export_violations_excel
@@ -239,6 +240,10 @@ async def quality_check_stored_file(
         violation_samples=[ViolationSample(**s) for s in check_result["violation_samples"]],
         checked_layers=report.checked_layers,
         created_at=report.created_at,
+        # v3 派生字段（P1：scoring_profile 暂为 v2，P3 改读 scores["profile"]）
+        verdict=derive_verdict(scores["overall"]),
+        scoring_profile="v2",
+        violation_count=check_result["violation_count"],
     )
 
 
@@ -318,7 +323,7 @@ async def quality_check_upload(
                 api_key_id=api_key_id,
                 file_name=file.filename,
                 detected_format="upload",
-                total_features=check_result["attr_summary"].get("total", 0),
+                total_features=check_result["feature_count"],
                 total_fields=0,
                 completeness_score=scores["completeness"],
                 constraint_violations=check_result["attr_results"],
@@ -359,6 +364,10 @@ async def quality_check_upload(
                 score_overall=report.score_overall,
                 checked_layers=report.checked_layers,
                 created_at=report.created_at,
+                # v3 派生字段（P1：scoring_profile 暂为 v2，P3 改读 scores["profile"]）
+                verdict=derive_verdict(scores["overall"]),
+                scoring_profile="v2",
+                violation_count=check_result["violation_count"],
             )
 
         except Exception as e:
@@ -760,15 +769,22 @@ async def list_quality_reports(
     )
     result = await db.execute(query)
     reports = result.scalars().all()
-    return [
-        QualityReportBrief(
+
+    def _brief(r: QualityReport) -> QualityReportBrief:
+        # 不通过条目数（旧 issues_count 语义是「结果条目数」，会把 pass 条目也算进去）
+        violation_count = sum(
+            1
+            for item in list(r.constraint_violations or []) + list(r.topology_violations or [])
+            if isinstance(item, dict) and item.get("status") == "fail"
+        )
+        return QualityReportBrief(
             id=r.id,
             file_name=r.file_name,
             detected_format=r.detected_format,
             completeness_score=r.completeness_score,
             total_features=r.total_features,
             total_fields=r.total_fields,
-            issues_count=len(r.constraint_violations or []) + len(r.topology_violations or []),
+            issues_count=violation_count,  # deprecated 字段，保留兼容：与 violation_count 同值
             created_at=r.created_at,
             # v2.5 五维评分
             score_completeness=r.score_completeness or 0.0,
@@ -776,6 +792,11 @@ async def list_quality_reports(
             score_consistency=r.score_consistency or 0.0,
             score_uniqueness=r.score_uniqueness or 0.0,
             score_topology=r.score_topology or 0.0,
+            # v3 口径元数据（Task 5 改为 _resolve_overall + getattr 读 profile）
+            score_overall=r.score_overall,
+            verdict=derive_verdict(r.score_overall),
+            scoring_profile="v2",
+            violation_count=violation_count,
             # 违规明细
             constraint_violations=r.constraint_violations,
             topology_violations=r.topology_violations,
@@ -787,8 +808,8 @@ async def list_quality_reports(
             stored_file_id=r.stored_file_id,
             data_standard_id=r.data_standard_id,
         )
-        for r in reports
-    ]
+
+    return [_brief(r) for r in reports]
 
 
 # ── GET /quality/{report_id}/export ──────────────────────────────────────────

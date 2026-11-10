@@ -59,6 +59,10 @@ _SAMPLE_RESULT = {
     },
     "total_violations": 0,
     "violation_samples": [],
+    # P1 新增契约键：feature_count 是要素数（不是 attr_summary.total），
+    # violation_count 是不通过条目数
+    "feature_count": 5,
+    "violation_count": 0,
 }
 
 
@@ -100,6 +104,10 @@ class TestQualityCheckStored:
         assert body["file_name"] == "路网.geojson"
         assert body["total_violations"] == 0
         assert body["scores"]["completeness"] == 1.0
+        # P1：派生字段随响应返回
+        assert body["verdict"] == "pass"
+        assert body["scoring_profile"] == "v2"
+        assert body["violation_count"] == 0
 
         # 校验写入了 QualityReport
         row = await db_session.get(QualityReport, body["report_id"])
@@ -170,7 +178,8 @@ class TestQualityCheckUpload:
 
         with patch(
             "app.api.v1.quality.run_quality_check",
-            new=AsyncMock(return_value=_SAMPLE_RESULT),
+            # 上传分支的临时 StoredFile 没有要素计数 → feature_count=0
+            new=AsyncMock(return_value={**_SAMPLE_RESULT, "feature_count": 0}),
         ):
             resp = await client.post(
                 "/api/v1/quality/check/upload",
@@ -188,6 +197,7 @@ class TestQualityCheckUpload:
         assert body["file_name"] == "道路.shp"
         assert body["total_features"] == 0
         assert body["score_completeness"] == 1.0
+        assert body["verdict"] == "pass"
 
     async def test_upload_fallback_legacy(self, client, db_session):
         """未指定标准 → 回退旧 check_quality 同步接口 → 200。

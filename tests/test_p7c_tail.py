@@ -111,6 +111,9 @@ _SAMPLE_RESULT = {
     },
     "total_violations": 0,
     "violation_samples": [],
+    # P1 新增契约键
+    "feature_count": 1,
+    "violation_count": 0,
 }
 
 

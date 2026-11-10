@@ -149,8 +149,10 @@ async def run_quality_check(
             "topo_results": [...],
             "topo_summary": {...},
             "scores": {...},
-            "total_violations": int,
+            "total_violations": int,      # 失败要素数之和
             "violation_samples": [...],
+            "feature_count": int,         # 文件要素数（stored_files.feature_count）
+            "violation_count": int,       # 不通过条目数（status == "fail" 的条目）
         }
     """
     # ── Phase 0.5: 无图形要素守卫 ─────────────────────────────────
@@ -176,6 +178,8 @@ async def run_quality_check(
                        "uniqueness": 0.0, "topology": 0.0, "overall": 0.0},
             "total_violations": 0,
             "violation_samples": [],
+            "feature_count": 0,
+            "violation_count": 0,
         }
 
     # ── Phase 1: 属性结构检查 ────────────────────────────────────────
@@ -238,6 +242,11 @@ async def run_quality_check(
         r.failed_count for r in topo_results if r.status == "fail"
     )
 
+    # 不通过条目数（v3 口径：与 total_violations 的「失败要素数之和」不同）
+    violation_count = sum(
+        1 for r in list(attr_results) + list(topo_results) if r.status == "fail"
+    )
+
     return {
         "attr_results": [_check_to_dict(r) for r in attr_results],
         "attr_summary": attr_summary,
@@ -246,6 +255,9 @@ async def run_quality_check(
         "scores": scores,
         "total_violations": total_violations,
         "violation_samples": violation_samples,
+        # 要素数取自 stored_files.feature_count（Phase 0.5 已查），不是检查项数
+        "feature_count": int(_fc or 0),
+        "violation_count": violation_count,
     }
 
 
