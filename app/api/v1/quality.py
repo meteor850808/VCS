@@ -73,6 +73,36 @@ def _overall_from_scores(
     )
 
 
+def _resolve_overall(report) -> float | None:
+    """统一读路径：库里的综合分优先，历史 v2 行兜底重算，v3 无分值返回 None。
+
+    - `score_overall` 非空 → 直接用（四舍五入 4 位）
+    - `score_overall` 为空且 `scoring_profile` 是 "v2" → 用五列按 WEIGHTS 兜底
+    - 其它（v3 全维度未评价 / 异常）→ None，让调用方显示「未评价」而不是 0%
+    """
+    if report.score_overall is not None:
+        return round(report.score_overall, 4)
+    if getattr(report, "scoring_profile", "v2") == "v2":
+        return _overall_from_scores(
+            report.score_completeness or 0.0,
+            report.score_accuracy or 0.0,
+            report.score_consistency or 0.0,
+            report.score_uniqueness or 0.0,
+            report.score_topology or 0.0,
+        )
+    return None
+
+
+def _verdict_color(verdict: str) -> str:
+    """判定 → 颜色（阈值映射集中在本函数，HTML/其它渲染不得复写字面量）。"""
+    return {
+        "pass": "#27ae60",
+        "warn": "#f39c12",
+        "fail": "#e74c3c",
+        "not_evaluated": "#7f8c8d",
+    }.get(verdict, "#7f8c8d")
+
+
 # ── 质检执行 ────────────────────────────────────────────────────────────────
 
 @router.post(
@@ -518,6 +548,8 @@ async def get_quality_report(
             sev = r.get("severity", "warning")
             severity_dist[sev] = severity_dist.get(sev, 0) + 1
 
+    overall = _resolve_overall(report)
+
     return QualityReportDetail(
         id=report.id,
         job_id=report.job_id,
@@ -552,13 +584,12 @@ async def get_quality_report(
         total_violations=total_violations,
         violation_samples=[ViolationSample(**s) for s in violation_samples],
         severity_dist=severity_dist,
-        score_overall=_overall_from_scores(
-            report.score_completeness or 0.0,
-            report.score_accuracy or 0.0,
-            report.score_consistency or 0.0,
-            report.score_uniqueness or 0.0,
-            report.score_topology or 0.0,
-        ) if report.score_overall is None else round(report.score_overall, 4),
+        score_overall=overall,
+        verdict=derive_verdict(overall),
+        scoring_profile=getattr(report, "scoring_profile", "v2"),
+        # Task 8 之后 ORM 才有这两列；getattr 兜底让读路径先于迁移可用
+        evaluated=getattr(report, "score_evaluated", None) or {},
+        evaluation_errors=getattr(report, "evaluation_errors", None) or [],
     )
 
 
@@ -579,41 +610,49 @@ async def get_quality_report_html(
         raise HTTPException(status_code=404, detail="报告不存在")
 
     # 从数据库数据即时生成 HTML 报告（不依赖磁盘文件）
-    overall = _overall_from_scores(
-        report.score_completeness or 0,
-        report.score_accuracy or 0,
-        report.score_consistency or 0,
-        report.score_uniqueness or 0,
-        report.score_topology or 0,
-    ) * 100
-
-    def _sc(v):
-        if v >= 85: return "#27ae60"
-        if v >= 60: return "#f39c12"
-        return "#e74c3c"
+    overall = _resolve_overall(report)          # float | None，0..1 量纲
+    verdict = derive_verdict(overall)
+    evaluated_map = getattr(report, "score_evaluated", None) or {}
 
     # 【S5】SVG 环形仪表（内联，零 CDN）
-    def _donut(pct: float, color: str, size: int = 84) -> str:
+    def _donut(pct: float, color: str, size: int = 84, text: str | None = None) -> str:
         r = (size - 12) / 2
         c = 2 * 3.14159265 * r
         filled = max(0, min(100, pct)) / 100 * c
+        label = text if text is not None else f"{pct:.0f}%"
         return (
             f'<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" style="transform:rotate(-90deg)">'
             f'<circle cx="{size/2}" cy="{size/2}" r="{r}" fill="none" stroke="#eef1f5" stroke-width="9"/>'
             f'<circle cx="{size/2}" cy="{size/2}" r="{r}" fill="none" stroke="{color}" stroke-width="9" '
             f'stroke-linecap="round" stroke-dasharray="{filled:.1f} {c:.1f}"/>'
             f'<text x="{size/2}" y="{size/2+5}" fill="{color}" font-size="{size*0.24}" font-weight="700" '
-            f'text-anchor="middle" transform="rotate(90 {size/2} {size/2})">{pct:.0f}%</text></svg>'
+            f'text-anchor="middle" transform="rotate(90 {size/2} {size/2})">{label}</text></svg>'
         )
 
-    def _dim_card(key: str, label: str, val: float) -> str:
+    def _dim_card(key: str, label: str, val: float | None) -> str:
+        """单维度卡；未评价（值缺失或 evaluated=False）显示「— / 未评价」，不显示 0%。"""
+        if val is None or evaluated_map.get(key) is False:
+            grey = _verdict_color("not_evaluated")
+            return (
+                f'<div class="dim"><div>{_donut(0, grey, text="—")}</div>'
+                f'<div class="dim-lbl">{label}</div>'
+                f'<div class="dim-val" style="color:{grey}">未评价</div></div>'
+            )
         pct = val * 100
-        color = _sc(pct)
+        color = _verdict_color(derive_verdict(val))
         return (
             f'<div class="dim"><div>{_donut(pct, color)}</div>'
             f'<div class="dim-lbl">{label}</div>'
             f'<div class="dim-val" style="color:{color}">{pct:.0f}%</div></div>'
         )
+
+    overall_color = _verdict_color(verdict)
+    if overall is None:
+        overall_donut = _donut(0, overall_color, text="—")
+        overall_val = "未评价"
+    else:
+        overall_donut = _donut(overall * 100, overall_color)
+        overall_val = f"{overall * 100:.0f}"
 
     # 【S5】严重度分布
     attr_list = report.constraint_violations or []
@@ -710,12 +749,12 @@ th {{ background: #f8f9fa; font-weight: 600; }}
 <h1>📊 质量检查报告</h1>
 <div class="meta">文件: {report.file_name} ｜ 要素数: {report.total_features} ｜ 违规总数: {total_failed} ｜ 生成时间: {str(report.created_at)[:19]}</div>
 <div class="scores">
-  <div class="dim"><div>{_donut(overall, _sc(overall))}</div><div class="dim-lbl">综合评分</div><div class="dim-val" style="color:{_sc(overall)}">{overall:.0f}</div></div>
-  {_dim_card('completeness','完整性', report.score_completeness or 0)}
-  {_dim_card('accuracy','准确性', report.score_accuracy or 0)}
-  {_dim_card('consistency','一致性', report.score_consistency or 0)}
-  {_dim_card('uniqueness','唯一性', report.score_uniqueness or 0)}
-  {_dim_card('topology','拓扑', report.score_topology or 0)}
+  <div class="dim"><div>{overall_donut}</div><div class="dim-lbl">综合评分</div><div class="dim-val" style="color:{overall_color}">{overall_val}</div></div>
+  {_dim_card('completeness','完整性', report.score_completeness)}
+  {_dim_card('accuracy','准确性', report.score_accuracy)}
+  {_dim_card('consistency','一致性', report.score_consistency)}
+  {_dim_card('uniqueness','唯一性', report.score_uniqueness)}
+  {_dim_card('topology','拓扑', report.score_topology)}
 </div>
 <h3>严重度分布</h3>
 <div class="sev-box">{sev_html}</div>
@@ -777,6 +816,7 @@ async def list_quality_reports(
             for item in list(r.constraint_violations or []) + list(r.topology_violations or [])
             if isinstance(item, dict) and item.get("status") == "fail"
         )
+        overall = _resolve_overall(r)
         return QualityReportBrief(
             id=r.id,
             file_name=r.file_name,
@@ -792,10 +832,10 @@ async def list_quality_reports(
             score_consistency=r.score_consistency or 0.0,
             score_uniqueness=r.score_uniqueness or 0.0,
             score_topology=r.score_topology or 0.0,
-            # v3 口径元数据（Task 5 改为 _resolve_overall + getattr 读 profile）
-            score_overall=r.score_overall,
-            verdict=derive_verdict(r.score_overall),
-            scoring_profile="v2",
+            # v3 口径元数据
+            score_overall=overall,
+            verdict=derive_verdict(overall),
+            scoring_profile=getattr(r, "scoring_profile", "v2"),
             violation_count=violation_count,
             # 违规明细
             constraint_violations=r.constraint_violations,
