@@ -40,6 +40,22 @@ WEIGHTS = {
     "topology": 0.15,      # 拓扑合规率
 }
 
+# ── v3 口径：规则 → 维度归集（键集必须与 WEIGHTS 一致）──────────────────────
+# 维度分 = 1 - Σfailed/Σtotal_checked（要素级），不是条目通过率。
+DIMENSION_RULES: dict[str, frozenset[str]] = {
+    "completeness": frozenset({"31010004"}),
+    "accuracy": frozenset({"31010005"}),
+    "consistency": frozenset({"31010001", "31010002", "31010003"}),
+    "uniqueness": frozenset({"31010006"}),
+    "topology": frozenset({"T01", "T02", "T03", "T04", "T05", "T11", "T12", "T13"}),
+}
+
+# 照常执行、只作诊断的规则：不进任何维度分，但会进 violation 清单
+DIAGNOSTIC_RULES: frozenset[str] = frozenset({
+    "31010007", "31010008", "31010009",   # A7 必要图层不为空 / A8 字段长度 / A9 精度
+    "T06", "T07", "T08", "T09", "T10",    # 面重叠 / 点重叠 / 面裂隙 / 面合并 / 线连通性
+})
+
 
 # ── 判定（阈值唯一来源：app.config.settings）─────────────────────────────────
 
@@ -67,11 +83,11 @@ def derive_verdict(
 
 # ── 评分计算 ─────────────────────────────────────────────────────────────────
 
-def compute_scores(
+def compute_scores_v2(
     attr_results: list[AttrCheckResult],
     topo_results: list[TopologyCheckResult],
 ) -> dict[str, float]:
-    """根据检查结果计算五维评分。
+    """v2 口径：条目通过率（历史实现，原样保留供回滚与对照）。
 
     Returns:
         {completeness, accuracy, consistency, uniqueness, topology, overall}
@@ -114,6 +130,79 @@ def compute_scores(
         "topology": topology,
         "overall": overall,
     }
+
+
+def compute_scores_v3(
+    attr_results: list[AttrCheckResult],
+    topo_results: list[TopologyCheckResult],
+) -> dict:
+    """v3 口径：要素级派生比率（唯一源），条目通过率降为诊断字段。
+
+    每维取该维规则集合内 `status in ("pass", "fail")` 且 `total_checked > 0`
+    的结果，按 `1 - Σfailed/Σtotal_checked` 求值；无有效分母即「未评价」
+    （None），不按 0 分计入。综合分只在已评价维度上重新归一化权重。
+
+    Returns:
+        {5 维: float | None, "overall": float | None, "evaluated": dict[str, bool],
+         "rule_pass_rate": float, "evaluation_errors": list[dict], "profile": "v3"}
+    """
+    results = list(attr_results) + list(topo_results)
+
+    # 规则执行异常（status="error"）→ 该报告整体不可信，判定降为 not_evaluated
+    evaluation_errors = [
+        {"rule_code": r.rule_code, "rule_name": r.rule_name, "message": r.message}
+        for r in results if r.status == "error"
+    ]
+
+    scores: dict[str, float | None] = {}
+    evaluated: dict[str, bool] = {}
+    for dim, codes in DIMENSION_RULES.items():
+        relevant = [
+            r for r in results
+            if r.rule_code in codes and r.status in ("pass", "fail") and r.total_checked > 0
+        ]
+        if not relevant:
+            scores[dim] = None
+            evaluated[dim] = False
+            continue
+        failed = sum(r.failed_count for r in relevant)
+        total = sum(r.total_checked for r in relevant)
+        scores[dim] = round(min(1.0, max(0.0, 1 - failed / total)), 4)
+        evaluated[dim] = True
+
+    active = [d for d in DIMENSION_RULES if evaluated[d]]
+    if active:
+        weight_sum = sum(WEIGHTS[d] for d in active)
+        overall = round(
+            sum(scores[d] * WEIGHTS[d] for d in active) / weight_sum, 4
+        )
+    else:
+        overall = None
+
+    # 条目通过率（诊断）：只看状态，与要素量无关
+    entry_passed = sum(1 for r in results if r.status == "pass")
+    entry_failed = sum(1 for r in results if r.status == "fail")
+    denominator = entry_passed + entry_failed
+    rule_pass_rate = round(entry_passed / denominator, 4) if denominator else 1.0
+
+    return {
+        **scores,
+        "overall": overall,
+        "evaluated": evaluated,
+        "rule_pass_rate": rule_pass_rate,
+        "evaluation_errors": evaluation_errors,
+        "profile": "v3",
+    }
+
+
+def compute_scores(
+    attr_results: list[AttrCheckResult],
+    topo_results: list[TopologyCheckResult],
+) -> dict:
+    """按 `settings.scoring_profile` 分发（v2 回滚开关 / v3 默认）。"""
+    if settings.scoring_profile == "v3":
+        return compute_scores_v3(attr_results, topo_results)
+    return compute_scores_v2(attr_results, topo_results)
 
 
 # ── 主入口 ───────────────────────────────────────────────────────────────────
@@ -175,7 +264,9 @@ async def run_quality_check(
             "topo_results": [],
             "topo_summary": dict(_empty),
             "scores": {"completeness": 0.0, "accuracy": 0.0, "consistency": 0.0,
-                       "uniqueness": 0.0, "topology": 0.0, "overall": 0.0},
+                       "uniqueness": 0.0, "topology": 0.0, "overall": 0.0,
+                       # 口径标签如实记录，避免这行被当成 v2 历史数据统计
+                       "profile": settings.scoring_profile},
             "total_violations": 0,
             "violation_samples": [],
             "feature_count": 0,

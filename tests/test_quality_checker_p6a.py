@@ -30,14 +30,14 @@ def _attr(rule_code="31010004", status="pass", **kw):
     )
 
 
-class TestComputeScores:
-    """52-82 五维评分。"""
+class TestComputeScoresV2:
+    """52-82 五维评分（v2 条目通过率口径，原实现原样保留）。"""
 
     def test_all_pass(self):
         rel = [_attr("31010004"), _attr("31010005"),
                _attr("31010001"), _attr("31010002")]
         topo = [TopologyCheckResult("T01", "空几何", "pass", "error")]
-        s = qc.compute_scores(rel, topo)
+        s = qc.compute_scores_v2(rel, topo)
         assert s["completeness"] == 1.0
         assert s["accuracy"] == 1.0
         assert s["consistency"] == 1.0
@@ -52,7 +52,7 @@ class TestComputeScores:
                _attr("31010001", status="fail", failed_count=1)]
         topo = [TopologyCheckResult("T01", "空几何", "fail", "error", failed_count=4),
                 TopologyCheckResult("T02", "自相交", "pass", "error")]
-        s = qc.compute_scores(rel, topo)
+        s = qc.compute_scores_v2(rel, topo)
         assert s["completeness"] == 0.5    # 2 中 1 过
         assert s["accuracy"] == 0.0        # 1 中 0 过
         assert s["consistency"] == 0.0     # 1 中 0 过
@@ -64,14 +64,14 @@ class TestComputeScores:
     def test_no_relevant_returns_1(self):
         """55-56/71：某维无相关结果 → 1.0（不惩罚）。"""
         rel = [_attr("31010001")]  # 只有 consistency
-        s = qc.compute_scores(rel, [])
+        s = qc.compute_scores_v2(rel, [])
         assert s["completeness"] == 1.0
         assert s["accuracy"] == 1.0
         assert s["uniqueness"] == 1.0
         assert s["topology"] == 1.0  # topo 空
 
     def test_empty_everything(self):
-        s = qc.compute_scores([], [])
+        s = qc.compute_scores_v2([], [])
         assert s["topology"] == 1.0 and s["overall"] == 1.0
 
     def test_weights_normalized(self):
@@ -94,6 +94,9 @@ class TestComputeScores:
                         "score_completeness*", "score_topology*0"):
             assert literal not in src, f"前端残留硬编码权重: {literal}"
         assert "score_overall" in src, "前端应消费后端 score_overall"
+
+    def test_default_dispatch_is_v3(self):
+        assert qc.compute_scores([], [])["profile"] == "v3"
 
 
 class TestDictConverters:
@@ -149,7 +152,10 @@ class TestRunQualityCheck:
                                    "by_severity": {"error": 0, "warning": 0}}))):
             res = await qc.run_quality_check(db_session, "sid", "no-such-file", "key1")
         assert res["attr_results"] == []
-        assert res["scores"]["overall"] == 1.0
+        # v3：没有任何结果 → 没有维度被评价 → 综合分为 None（「未评价」），
+        # 不再是 v2 的「空结果 = 1.0 满分」
+        assert res["scores"]["overall"] is None
+        assert not any(res["scores"]["evaluated"].values())
 
     async def test_happy_no_standard(self, db_session, monkeypatch):
         """156-165：standard_id=None → attr 空；topo 正常跑。"""

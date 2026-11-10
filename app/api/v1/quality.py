@@ -247,6 +247,10 @@ async def quality_check_stored_file(
         score_uniqueness=scores["uniqueness"],
         score_topology=scores["topology"],
         score_overall=scores["overall"],
+        # v3 口径元数据
+        scoring_profile=scores.get("profile", "v2"),
+        score_evaluated=scores.get("evaluated"),
+        evaluation_errors=scores.get("evaluation_errors") or None,
         html_report_path=html_path,
         json_report_path=json_path,
     )
@@ -265,15 +269,25 @@ async def quality_check_stored_file(
         attr_summary=CheckSummary(**check_result["attr_summary"]),
         topo_results=[TopoCheckItemResult(**r) for r in check_result["topo_results"]],
         topo_summary=CheckSummary(**check_result["topo_summary"]),
-        scores=DimensionScores(**scores),
+        scores=DimensionScores(
+            completeness=scores["completeness"],
+            accuracy=scores["accuracy"],
+            consistency=scores["consistency"],
+            uniqueness=scores["uniqueness"],
+            topology=scores["topology"],
+            overall=scores["overall"],
+            evaluated=scores.get("evaluated", {}),
+            rule_pass_rate=scores.get("rule_pass_rate", 1.0),
+        ),
         total_violations=check_result["total_violations"],
         violation_samples=[ViolationSample(**s) for s in check_result["violation_samples"]],
         checked_layers=report.checked_layers,
         created_at=report.created_at,
-        # v3 派生字段（P1：scoring_profile 暂为 v2，P3 改读 scores["profile"]）
-        verdict=derive_verdict(scores["overall"]),
-        scoring_profile="v2",
+        # v3 派生字段
+        verdict=derive_verdict(scores["overall"], scores.get("evaluation_errors")),
+        scoring_profile=scores.get("profile", "v2"),
         violation_count=check_result["violation_count"],
+        evaluation_errors=scores.get("evaluation_errors") or [],
     )
 
 
@@ -368,6 +382,10 @@ async def quality_check_upload(
                 score_uniqueness=scores["uniqueness"],
                 score_topology=scores["topology"],
                 score_overall=scores["overall"],
+                # v3 口径元数据
+                scoring_profile=scores.get("profile", "v2"),
+                score_evaluated=scores.get("evaluated"),
+                evaluation_errors=scores.get("evaluation_errors") or None,
             )
             db.add(report)
             await db.commit()
@@ -394,10 +412,11 @@ async def quality_check_upload(
                 score_overall=report.score_overall,
                 checked_layers=report.checked_layers,
                 created_at=report.created_at,
-                # v3 派生字段（P1：scoring_profile 暂为 v2，P3 改读 scores["profile"]）
-                verdict=derive_verdict(scores["overall"]),
-                scoring_profile="v2",
+                # v3 派生字段
+                verdict=derive_verdict(scores["overall"], scores.get("evaluation_errors")),
+                scoring_profile=scores.get("profile", "v2"),
                 violation_count=check_result["violation_count"],
+                evaluation_errors=scores.get("evaluation_errors") or [],
             )
 
         except Exception as e:
