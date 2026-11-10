@@ -339,6 +339,9 @@ class TestQualityDetail:
         assert body["severity_dist"] == {"error": 1, "warning": 1}
         # v2.20 权重契约：score_overall 由后端按 WEIGHTS 计算（0.9×.25+.85×.25+.8×.20+.75×.15+.7×.15）
         assert body["score_overall"] == pytest.approx(0.815)
+        # Task 5：详情走 _resolve_overall + derive_verdict
+        assert body["verdict"] == "warn"
+        assert body["scoring_profile"] == "v2"
         samples = body["violation_samples"]
         # 属性样本：int → feature_index，其它 → sample
         attr_smpl = [s for s in samples if s["rule_code"] == "attr_1"]
@@ -514,6 +517,11 @@ class TestQualityList:
         first = data[0]
         assert first["score_completeness"] == 0.9
         assert first["issues_count"] == 2  # attr 1 + topo 1
+        # P1/Task5：列表读路径统一（v2 历史行兜底重算 overall，verdict 派生）
+        assert first["violation_count"] == 2
+        assert first["score_overall"] == pytest.approx(0.815)
+        assert first["verdict"] == "warn"
+        assert first["scoring_profile"] == "v2"
 
     async def test_list_reports_pagination(self, client, db_session):
         raw, key = await _create_key(db_session, "qc_list_pg")
