@@ -66,3 +66,25 @@ class TestSchemaV3:
             score_accuracy=None, score_overall=None,
         )
         assert d.score_accuracy is None and d.score_overall is None
+
+
+# ── P2：结果级 denominator_scope ──────────────────────────────────────────────
+
+from app.services.quality.attribute_checker import CheckResult
+from app.services.topology_checker import TopologyCheckResult, _make_result
+
+
+class TestDenominatorScope:
+    def test_default_is_full(self):
+        assert CheckResult("31010004", "r", "pass", "error").denominator_scope == "full"
+        assert TopologyCheckResult("T01", "空几何", "pass", "error").denominator_scope == "full"
+
+    def test_make_result_forwards_scope_as_field(self):
+        r = _make_result("irregular_polygon", status="pass", total_checked=6000,
+                         denominator_scope="truncated")
+        assert r.denominator_scope == "truncated"
+        assert r.detail == {}          # 不得落进 detail
+
+    def test_dict_converters_emit_scope(self):
+        assert qc._check_to_dict(CheckResult("x", "r", "pass", "error"))["denominator_scope"] == "full"
+        assert qc._topo_to_dict(TopologyCheckResult("T01", "空几何", "pass", "error"))["denominator_scope"] == "full"

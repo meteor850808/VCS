@@ -84,6 +84,9 @@ class CheckResult:
     layer: str = ""
     failed_count: int = 0
     total_checked: int = 0
+    # v3：分母口径。full=全量检查；truncated=分母被截断（如抽样/上限），
+    # 此时该规则的失败率不能直接外推为要素级比例
+    denominator_scope: str = "full"
     expected: str = ""
     actual: str = ""
     message: str = ""
