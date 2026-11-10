@@ -22,6 +22,7 @@ from app.services.topology_checker import (
     TopologyCheckResult,
     run_topology_checks,
 )
+from app.config import settings
 from app.core.constants import CRITICAL_FIELDS
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,30 @@ WEIGHTS = {
     "uniqueness": 0.15,    # 主键唯一性
     "topology": 0.15,      # 拓扑合规率
 }
+
+
+# ── 判定（阈值唯一来源：app.config.settings）─────────────────────────────────
+
+def derive_verdict(
+    overall: float | None,
+    evaluation_errors: list[dict] | None = None,
+) -> str:
+    """由综合分派生判定。阈值来自 settings，不在本函数内写字面量。
+
+    Args:
+        overall: 综合分（0..1）。None 表示本轮没有任何维度被评价。
+        evaluation_errors: 规则执行异常清单；非空即视为结果不可信。
+
+    Returns:
+        "pass" | "warn" | "fail" | "not_evaluated"
+    """
+    if overall is None or evaluation_errors:
+        return "not_evaluated"
+    if overall >= settings.scoring_pass_threshold:
+        return "pass"
+    if overall >= settings.scoring_warn_threshold:
+        return "warn"
+    return "fail"
 
 
 # ── 评分计算 ─────────────────────────────────────────────────────────────────

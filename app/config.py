@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     sandbox_limit: int = 1000
     # v2.10：移除 max_features_per_upload（要素流式全量入库，无单文件截断上限）
 
+    # ── 质检评分判定（v2.25.0；阈值唯一来源，前端/HTML 不得硬编码）──
+    scoring_pass_threshold: float = 0.85      # 综合分 >= 该值判 pass
+    scoring_warn_threshold: float = 0.60      # 综合分 >= 该值判 warn，否则 fail
+    scoring_profile: str = "v3"               # v2 | v3，回滚开关
+
     # ── WebSocket ─────────────────────────
     ws_heartbeat_interval: int = 30
 
