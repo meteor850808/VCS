@@ -40,3 +40,17 @@ def test_frontend_has_no_completeness_fallback():
 def test_backend_html_has_no_threshold_literals():
     src = _src("app/api/v1/quality.py")
     assert ">= 85" not in src and ">= 60" not in src
+
+
+# ── P4：发版说明与版本号 ──────────────────────────────────────────────────────
+
+def test_release_note_exists_and_states_incompatibility():
+    note = _src("docs/revision_v2_25_0.md")
+    assert "v3" in note and "v2" in note
+    assert "不可" in note          # 不可直接比较
+    assert "T06" in note           # 诊断项变化必须写明
+    assert "5000" in note          # T11 截断口径必须写明
+
+
+def test_context_version_bumped():
+    assert "2.25.0" in _src("CONTEXT.md")
