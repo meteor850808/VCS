@@ -258,6 +258,10 @@ class TestRunAttributeChecks:
         assert by_code["31010008"].status == "pass"
         assert by_code["31010009"].status == "pass"
         assert "31010007" not in by_code  # A7 无要素才出现
+        # v3 分母：结构三项按「图层」为单位计数
+        assert by_code["31010001"].total_checked == 1
+        assert by_code["31010002"].total_checked == 1
+        assert by_code["31010003"].total_checked == 1
         assert summary["failed"] == 0
         assert summary["total"] == 8
 
@@ -308,6 +312,13 @@ class TestRunAttributeChecks:
         # 控制点层无要素 → 另产出 A7
         assert "31010007" in by_code
         assert by_code["31010007"].layer == "控制点层"
+        # v3 分母：A1 标准要求 2 个图层、缺 1 个；A2/A3 每图层 1 个单位
+        assert by_code["31010001"].total_checked == 2
+        assert by_code["31010001"].failed_count == 1
+        assert by_code["31010002"].total_checked == 1
+        assert by_code["31010002"].failed_count == 1
+        assert by_code["31010003"].total_checked == 1
+        assert by_code["31010003"].failed_count == 1
         assert summary["total"] == 9
         assert summary["failed"] == 9
         assert summary["by_severity"] == {"error": 5, "warning": 4, "info": 0}

@@ -364,6 +364,7 @@ class TestRunTopologyChecks:
         r = results[0]
         assert r.status == "fail"
         assert r.failed_count == 3  # point+line+polygon 各 1
+        assert r.total_checked == 9  # count( 处理器每个几何类型返回 3 → 3 类型 × 3
         assert "3 条空几何" in r.message
 
     async def test_t2_self_intersection_both_types(self, monkeypatch):
@@ -496,6 +497,38 @@ class TestRunTopologyChecks:
         assert r.failed_count == 2
         assert r.feature_indices == [2, 3]
         assert r.total_checked == 5
+
+    async def test_t11_marks_truncated_over_5000(self, monkeypatch):
+        """分析量被截到 5000 时，分母必须如实标 truncated。"""
+        monkeypatch.setattr(tc, "resolve_metric_strategy", _fake_resolve)
+        rows = [_R(feature_index=i, wkt=SQUARE_WKT) for i in range(5001)]
+        db = FakeTopologyDB([
+            ("ST_AsText", lambda: _Rows(rows)),
+            ("count(", lambda: _Rows([5001])),
+        ])
+        results, _ = await run_topology_checks(
+            db, "file-abc123", geometry_type="polygon",
+            config=TopologyConfig(enabled_rules=["irregular_polygon"]))
+        r = results[0]
+        assert r.total_checked == 5000
+        assert r.denominator_scope == "truncated"
+
+    async def test_t11_scope_full_under_limit(self, monkeypatch):
+        monkeypatch.setattr(tc, "resolve_metric_strategy", _fake_resolve)
+        db = FakeTopologyDB([
+            ("ST_AsText", lambda: _Rows([
+                _R(feature_index=1, wkt=SQUARE_WKT),
+                _R(feature_index=2, wkt=SQUARE_WKT),
+                _R(feature_index=3, wkt=SQUARE_WKT),
+            ])),
+            ("count(", lambda: _Rows([3])),
+        ])
+        results, _ = await run_topology_checks(
+            db, "file-abc123", geometry_type="polygon",
+            config=TopologyConfig(enabled_rules=["irregular_polygon"]))
+        r = results[0]
+        assert r.total_checked == 3
+        assert r.denominator_scope == "full"
 
     async def test_t12_ring_direction_fail(self, monkeypatch):
         monkeypatch.setattr(tc, "resolve_metric_strategy", _fake_resolve)
