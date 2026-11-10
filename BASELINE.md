@@ -1,6 +1,8 @@
 # VCS 空间质检 — 项目基准线文档
 
 > **维护规则**: 每次功能变更后，同步更新本文档对应章节。  
+> **最后更新**: 2026-11-10 · **v2.25.0 五维评分口径 v3（要素级派生）**：① 维度分由「条目通过率」改为「要素级派生比率」`1 - Σfailed/Σtotal_checked`，条目通过率降为诊断字段 `rule_pass_rate`；归集关系收敛到 `quality_checker.DIMENSION_RULES`（completeness←31010004、accuracy←31010005、consistency←31010001/02/03、uniqueness←31010006、topology←T01–T05+T11–T13）。② `DIAGNOSTIC_RULES` = 31010007/08/09 + T06–T10：照常执行、进违规清单，但不进任何维度分。③ 未评价维度写 NULL 并从权重分母中剔除，全未评价则综合分 NULL、判定 `not_evaluated`；判定阈值收敛到 `config.scoring_pass_threshold`/`scoring_warn_threshold`（0.85/0.60），新增回滚开关 `scoring_profile`（`SCORING_PROFILE`，默认 `v3`）。④ 结构三项补分母（A1 分母=标准要求图层数，A2/A3 每图层 1 单位），T01 分母=参与检查要素总数，T11 分析量上限 5000 且超限标 `denominator_scope="truncated"`。⑤ 迁移 `0014_scoring_profile`：新增 `scoring_profile`/`score_evaluated`/`evaluation_errors` 三列，五个 `score_*` 列放宽为可空（NULL ≠ 0 分）；脱管库改用幂等直连脚本 `scripts/apply_0014.py`。⑥ 前端 `scoreView`/`dimCard` 统一渲染、HTML 报告与 Excel 导出统一读 `score_overall` + `verdict`，移除 85/60 阈值字面量。⑦ 历史报告不重算，v3 与 v2 分数不可比。⑧ 全量回归 **1825 passed / 4 skipped**（1 failed + 4 errors 均为既有环境缺口：`data_standard_template.xlsx` 未入库、LibreDWG 未安装）。详见 `docs/revision_v2_25_0.md`。
+> **最后更新**: 2026-10-19 · **仓库整洁化（文档归并 + 第三方二进制跟踪策略统一）**：① 精简 `CONTEXT.md`（去除与本文档重复内容）；新增 `docs/README.md`（docs 总索引）、`docs/docker/README.md`、`docs/deploy/README.md`（部署运维索引）。② `.gitignore` 规范化（新增 `*.log` 忽略运行日志；修复一次 UTF-16 混编损坏）。③ **第三方二进制跟踪策略统一**：将 `Redis8/` 运行时二进制（`*.exe`/`*.dll`，~37MB）**移出版本控制**并纳入 `.gitignore`，与既有 `tools/libredwg/`「第三方二进制运行时不入库」策略一致（依据 `docs/stage_report_2026-09-01.md` §3.2 option b）；仅保留 `Redis8/` 的 `*.conf`/`README*.md`/`start.bat` 与 `tools/README.md` 入库；二者二进制仍留本地，并由 `deploy/offline/`（`build_bundle.ps1` 自 `Redis8/`+`tools/libredwg/` 收集）与 Docker 镜像供给。
 > **最后更新**: 2026-10-19 · **v2.24.0 运维交付（Docker 操作手册 + 发布编排）**：新增《Docker 部署·使用·调试操作手册》（`docs/docker_ops_manual_v2_24_0.md`，覆盖架构/镜像获取三路径/配置/三种部署模式/日常运维/排障速查/数据备份恢复/升级回滚/安全/附录）+ 新增发布编排 `docker-compose.release.yml`（基于已发布镜像 `image:` 起服，内置 Nginx/TLS/secrets/端口收敛/migrate Job，`REGISTRY`/`NAMESPACE`/`TAG` 三变量切换仓库，支持离线 `save`/`load`）。
 > **最后更新**: 2026-10-16 · **v2.24.0 CI 双架构镜像构建与发布**：新增/完善 GitHub Actions 流水线——`docker-publish.yml` 用**原生 runner**（`linux/amd64`→`ubuntu-latest`、`linux/arm64`→`ubuntu-24.04-arm`）构建 5 个镜像（vcs-api/worker/beat/flower/nginx）并 `imagetools create` 合并为 **multi-arch manifest** 推送 Docker Hub；矩阵 = 2 runner × 5 镜像 = 10 build + merge-manifest。构建期修复：`libmdbodbc1`→`odbc-mdbtools`（驱动路径动态探测）、LibreDWG `configure --disable-python`（builder 补 `python3`）、curl 下载 `--retry*`；`ci.yml` 的 `prod-config` 纳入新增脚本 `bash -n`。首轮全绿（Run 38900892791，11/11）。详见 `docs/revision_v2_24_0.md` §9。
 > **最后更新**（历史）: 2026-10-13 · **v2.24.0 Docker 生产加固（Nginx 反代/自签 TLS + Docker secrets + entrypoint 派生连接串 + LibreDWG/mdbtools Linux 适配 + Flower/Beat 修复 + Makefile）**；（历史）2026-10-09 · **v2.23.0 Windows 离线一键部署子系统（deploy/）**：新增 `deploy/` 离线一键部署子系统——联网机 `build_bundle.ps1` 生成离线资源包（安装包 + Redis/LibreDWG 二进制 + 全量 wheel + 种子，逐文件 SHA-256 落 `offline/manifest.json`）→ 目标机 `deploy_offline.bat` 十二阶段编排安装（00_preflight 校验清单 / 10 Python / 20 PG / 21 PostGIS / 22 ACE [非关键] / 25 VC++ [非关键] / 30 Redis / 40 venv / 50 建库迁移 / 60 凭证+种子 / 90 起服 / 99 验证）；UAC 自提升、`--from N` 幂等续跑、`--dry-run` 干跑、失败分级 + `deploy/logs/` 日志、凭证（ADMIN_INIT_KEY/API_KEY）落 `deploy/.install_state.json`；旧 `deploy_windows.bat` 退役为薄封装转调 `deploy\deploy_offline.bat`。详见 `docs/revision_v2_23_0.md`。
@@ -149,7 +151,8 @@
 │   └── main.py              # FastAPI 入口
 ├── alembic/                 # 数据库迁移
 ├── scripts/                 # 初始化/调试/迁移/冒烟脚本（含 smoke_convert.py、smoke_imp_exp_ui.py）
-├── tools/libredwg/          # LibreDWG v0.14 win64 二进制 (dwg2dxf.exe + 运行时 DLL)
+├── tools/libredwg/          # LibreDWG v0.14 win64 二进制 (dwg2dxf.exe + 运行时 DLL)〔.gitignore 排除，按需 vendor〕
+├── Redis8/                  # Redis 8.10 win64 运行时 (redis-server.exe + msys DLL)〔二进制 .gitignore 排除；仅 conf/README/start.bat 入库〕
 ├── tests/                   # pytest 测试套件（含 e2e/ 浏览器级回归）
 ├── deploy/                  # Windows 离线一键部署子系统 (v2.23.0)
 │   ├── offline/             # 离线资源包（联网机由 build_bundle.ps1 生成；manifest.json = SHA-256 校验清单）
@@ -541,12 +544,17 @@
 | file_name | String(512) | | 文件名 |
 | detected_format | String(64) | | 检测格式 |
 | total_features / total_fields | Integer | | 要素/字段数 |
-| **五维评分** | | | |
-| score_completeness | Float | DEFAULT 0.0 | 完整性 |
-| score_accuracy | Float | DEFAULT 0.0 | 准确性 |
-| score_consistency | Float | DEFAULT 0.0 | 一致性 |
-| score_uniqueness | Float | DEFAULT 0.0 | 唯一性 |
-| score_topology | Float | DEFAULT 0.0 | 拓扑 |
+| **五维评分**（v3 起可空：NULL = 该维本轮未评价，不是 0 分） | | | |
+| score_completeness | Float | NULLABLE (v2.25.0) | 完整性 |
+| score_accuracy | Float | NULLABLE (v2.25.0) | 准确性 |
+| score_consistency | Float | NULLABLE (v2.25.0) | 一致性 |
+| score_uniqueness | Float | NULLABLE (v2.25.0) | 唯一性 |
+| score_topology | Float | NULLABLE (v2.25.0) | 拓扑 |
+| score_overall | Float | NULLABLE | 加权综合分（v2.20 起映射；未评价维不参与，全未评价则 NULL） |
+| **口径元数据**（v2.25.0 新增） | | | |
+| scoring_profile | String(8) | NOT NULL, DEFAULT 'v2' | 写入时的评分口径：`v2` 条目通过率 / `v3` 要素级派生 |
+| score_evaluated | JSON | | `{维度: 是否已评价}` |
+| evaluation_errors | JSON | | 规则执行异常清单；非空即判定 `not_evaluated` |
 | completeness_score | Float | DEFAULT 1.0 | 完整性得分(旧) |
 | missing_fields / null_value_counts | JSON | | 缺失统计 |
 | critical_fields_status | JSON | | 关键字段状态 |
@@ -1638,7 +1646,7 @@ DEBUG: "true"
 | `attribute_checker.load_standard_tables` 重复收集 | P5i 修复前：`DataStandard.layer_groups` 关系返回标准**全部**层组，而 `_collect` 又递归 children 从每个层组起步 → 父子层级标准下**每张表被收集两次**，同名检查结果（A2/A3/A7 等）增倍；已加顶层过滤（`parent_id is not None → continue`，child 组由顶层递归覆盖）。`A1` 用 set 去重曾掩盖症状 | 无需数据迁移；P5i 起单表仅产出单份检查记录 |
 | 前端 CDN 依赖 | ~~`index.html` 依赖 unpkg Leaflet（css+js）~~ → **v2.17 完成自托管**：Leaflet 1.9.4 dist 落地 `app/frontend/vendor/leaflet/`（css+js+images），index.html 改本地 `/app/vendor/leaflet/` 引用，零 CDN 请求（Playwright 验证 L v1.9.4 + 0 网络错误） | **已完成（v2.17.0）**；如后续新增第三方前端依赖，沿用 vendor/ 自托管先例 |
 | 批量 `except Exception` | 全库 100+ 处吞异常 | 区分业务错误码与 5xx 完整 traceback；best-effort 用 `contextlib.suppress` |
-| 第三方二进制运行时不入库 | `tools/libredwg/`（~35MB DWGTools DLL/EXE）被 .gitignore 排除，为 DWG 转换运行依赖 | 已建 `tools/README.md` 说明获取来源；部署时按 README vendor 或镜像 apt 安装 `libredwg-utils`（登记） |
+| 第三方二进制运行时不入库 | **策略已统一**：`tools/libredwg/`（~35MB DWGTools DLL/EXE）与 `Redis8/` 运行时二进制（`*.exe`/`*.dll`，~37MB）均被 `.gitignore` 排除，分别为 DWG 转换与 Redis 运行依赖；二者仅保留小体积 `*.conf`/`README`/`start.bat` 入库 | 已建 `tools/README.md` 说明获取来源；部署时按 README vendor 或镜像 apt 安装 `libredwg-utils`；Redis8 二进制此前曾被误纳入版本控制，已按 `docs/stage_report_2026-09-01.md` §3.2 option b 移出（登记） |
 | WebSocket 剩余 Redis pubsub 未盖 | ~~`ws.py` 80%~~ → **已完成 100%**（`tests/test_ws_flow.py` 与 `test_ws_guard.py` 用 fake WebSocket + monkeypatch 隔离 DB/Redis，覆盖握手/订阅/转发/WebSocketDisconnect/守卫全分支；全量覆盖报告中 ws.py 110 stmts 0 miss） | **已完成（v2.17 前已闭环）**；剩余真实 Redis pubsub 集成验证依赖环境（可选） |
 | secret_key 死配置（v2.20 弃用保留） | **C2**：`settings.secret_key` 全仓零引用（认证走 API Key SHA-256 + admin_init_key，无签名密钥），`"change-me-in-production"` 默认值非风险源；因 Settings `extra_forbidden` 严格模式，删除字段会让带 `SECRET_KEY` 的存量 .env 启动失败，故保留字段仅作兼容 | **v2.20 已标注弃用**（config.py 注释 + `.env.example`/§9 移除）；彻底删除需先清全部存量 .env 的 `SECRET_KEY` 行（或改 extra 策略），再移除字段 |
 | 覆盖回跌（v2.18/v2.19 新代码） | P7c（v2.17.0）全库 100% 后新增功能代码未配套全覆盖。**v2.22.1 第四批收口 71 行**：`logging_setup.py`(3)、`cad_parser.py`(10)、`cad_cache.py`(24)、`cad_preview.py`(34) 四个文件全部 **100%**（`test_core_a_p7a.py` TestLoggingSetup +2、`test_cad_parser.py` TestCADParserBranchCoverage +5、新增 `test_cad_cache.py` 13 例、`test_cad_preview.py` TestCADPreviewFallback +12）；**第五批全量清零（47 → 0 miss）**：`export_service.py` 34（新建 `test_export_service_branches.py` 20 例）、cad 路由 4（`test_cad_routes.py` TestCADBranchCoverage +4）、`data.py` 7（`test_data_cad_cache_fail.py` 新建 + `test_data_download_export.py` +2）、`feature_store.py` 2（新建 `test_feature_store_guards.py` 3 例）→ **全库覆盖 100.00%**（11094 stmts / 0 miss，**1587 passed**），P7 技术债闭环（第二次全库 100% 里程碑） | **已完成（v2.22.1 第五批）** |
