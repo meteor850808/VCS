@@ -112,5 +112,12 @@ JSON 报告或接口明细。
 4. 若线上库的 `alembic_version` 已被人工改动（链脱管），仓库链仍为
    `0014_scoring_profile ← 0013_cad_enhancement`，线上可改用幂等直连脚本
    `scripts/apply_0014.py`（支持 `--dry-run`，不触碰 `alembic_version`）。该脚本与 v3
-   上线必须同步执行：六列未放宽时，v3 写入「未评价 = NULL」会违反 NOT NULL 约束，
-   而 `completeness_score` 若仍是 `NOT NULL DEFAULT 1.0`，未评价会被静默写成 100% 完整。
+   上线必须同步执行，否则**写入与读取都会直接报错**（已在 PostgreSQL 上实测，行为是
+   「失败」而非「静默降级」）：
+   - 三列未加时，读写都报 `42703 undefined_column`（`scoring_profile` 字段不存在）——
+     报告详情/列表接口会 500；
+   - 三列已加但六列未放宽时，报 `23502 not_null_violation`；列上的服务端默认值
+     （`DEFAULT 0.0`）**不会**兜住，因为 ORM 对显式 `None` 会发出 `NULL`，而服务端默认
+     只在列被省略时生效；
+   - 唯一会「静默改写」的情形是 ORM 列上带 Python 侧 `default`（修复前 `completeness_score`
+     的 `default=1.0` 会把未评价写成 `1.0`），本次已一并移除。
