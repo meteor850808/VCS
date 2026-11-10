@@ -47,6 +47,7 @@ def _mk_report(**overrides):
         "detected_format": "SHP",
         "completeness_score": 88.5,
         "score_completeness": 0.885,
+        "score_overall": None,
         "created_at": "2026-09-07T10:00:00",
         "api_key_id": "key-1",
         "stored_file_id": "file-abc123",
@@ -369,3 +370,31 @@ class TestExportViolationsExcel:
         assert row[0] == "issue_x"
         assert row[5] == "f"
         assert row[7] == 9
+
+    def test_excel_uses_score_overall(self, tmp_path):
+        """综合分必须读 score_overall，不得回退到单维 completeness。"""
+        report = _mk_report(
+            score_overall=0.91, score_completeness=0.12,
+            constraint_violations=[
+                {"rule_code": "A01", "status": "fail", "failed_count": 3},
+                {"rule_code": "A02", "status": "pass"},
+            ],
+        )
+        out_path = str(tmp_path / "overall.xlsx")
+        export_violations_excel(report, out_path)
+        ws = self._load(out_path)["违规清单"]
+        txt = str(ws["A2"].value)
+        assert "91%" in txt
+        assert "12%" not in txt
+        # 违规总数只计不通过条目（1 条 fail，1 条 pass 不计）
+        assert "违规总数: 1" in txt
+
+    def test_excel_shows_not_evaluated_when_none(self, tmp_path):
+        """score_overall 为 NULL（v3 未评价）时显示「未评价」，不得显示 0%。"""
+        report = _mk_report(score_overall=None, score_completeness=0.12)
+        out_path = str(tmp_path / "none.xlsx")
+        export_violations_excel(report, out_path)
+        ws = self._load(out_path)["违规清单"]
+        txt = str(ws["A2"].value)
+        assert "未评价" in txt
+        assert "0%" not in txt

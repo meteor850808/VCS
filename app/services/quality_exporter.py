@@ -267,10 +267,17 @@ def export_violations_excel(report, output_path: str) -> str:
     # 报告头部
     ws.insert_rows(1, 3)
     ws['A1'] = f"质检报告: {report.file_name}"
-    ws['A2'] = (
-        f"综合评分: {report.score_completeness:.0%}  "
-        f"违规总数: {len(report.topology_violations or []) + len(report.constraint_violations or []) + len(report.issues or [])}"
+    # 综合分只读 score_overall（v3 未评价时为 NULL → 显示「未评价」，不回退单维）
+    overall = getattr(report, "score_overall", None)
+    score_txt = f"{overall:.0%}" if overall is not None else "未评价"
+    violation_count = sum(
+        1
+        for item in list(report.topology_violations or [])
+        + list(report.constraint_violations or [])
+        + list(report.issues or [])
+        if isinstance(item, dict) and item.get("status") == "fail"
     )
+    ws['A2'] = f"综合评分: {score_txt}  违规总数: {violation_count}"
     ws['A1'].font = Font(bold=True, size=14)
 
     # 表头
