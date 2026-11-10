@@ -617,6 +617,9 @@ _FAKE_QC_RESULT = {
     "topo_summary": {"total": 2, "passed": 2, "failed": 0, "by_rule": {}},
     "attr_results": [{"rule_id": "r1", "passed": True}],
     "topo_results": [],
+    # P1 新增契约键（run_quality_check 返回值）
+    "feature_count": 5,
+    "violation_count": 1,
 }
 
 

@@ -2394,7 +2394,7 @@ async def check_stored_file_quality(
     api_key: ApiKey = Depends(authenticated),
 ):
     from app.models.quality_report import QualityReport
-    from app.services.quality_checker import run_quality_check
+    from app.services.quality_checker import run_quality_check, derive_verdict
     from app.services.topology_checker import TopologyConfig
 
     result = await db.execute(
@@ -2485,7 +2485,7 @@ async def check_stored_file_quality(
         api_key_id=api_key_id,
         file_name=file_name,
         detected_format="stored_file",
-        total_features=check_result["attr_summary"].get("total", 0),
+        total_features=check_result["feature_count"],
         total_fields=0,
         completeness_score=scores["completeness"],
         constraint_violations=check_result["attr_results"],
@@ -2531,4 +2531,8 @@ async def check_stored_file_quality(
         json_report_path=report.json_report_path,
         checked_layers=report.checked_layers,
         created_at=report.created_at,
+        # v3 派生字段（P1：scoring_profile 暂为 v2，P3 改读 scores["profile"]）
+        verdict=derive_verdict(scores["overall"]),
+        scoring_profile="v2",
+        violation_count=check_result["violation_count"],
     )
