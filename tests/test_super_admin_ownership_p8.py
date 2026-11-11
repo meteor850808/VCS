@@ -10,9 +10,12 @@
 同时用静态扫描兜住「新增代码又写回虚拟 ID」的回归。
 """
 
+import io
+import tokenize
 import uuid
 from pathlib import Path
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
@@ -180,18 +183,77 @@ class TestNoVirtualKeyIdWrites:
 
     _FORBIDDEN = ("api_key.id", "auth.id")
     _EXEMPT_FILES = {"app/core/auth_context.py"}
+    # 扫描面下限：`app/` 当前有 126 个 .py。若路径算错导致 rglob 扫空，
+    # 守卫会静默变绿；用下限把「空扫描」变成显式失败。
+    _MIN_SCANNED_FILES = 100
+    # 需要屏蔽的 token：字符串、注释、以及 f-string 的字面量片段。
+    _MASKED_TOKENS = frozenset(
+        {tokenize.STRING, tokenize.COMMENT}
+        | {
+            getattr(tokenize, name)
+            for name in ("FSTRING_START", "FSTRING_MIDDLE", "FSTRING_END")
+            if hasattr(tokenize, name)
+        }
+    )
 
-    def test_app_has_no_virtual_key_id_references(self):
-        root = Path(__file__).resolve().parents[1]
+    @staticmethod
+    def _mask_strings_and_comments(text: str) -> list[str]:
+        """把字符串与注释替换成空格，保留行号与列位置。
+
+        目的：文档/注释里提到 `auth.id` 不算违规，而真正写在表达式里的
+        （含 f-string 内的表达式）仍然保留原样，可被下面的包含匹配抓到。
+        """
+        lines = text.splitlines()
+        chars = [list(line) for line in lines]
+        try:
+            for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+                if tok.type not in TestNoVirtualKeyIdWrites._MASKED_TOKENS:
+                    continue
+                (start_row, start_col), (end_row, end_col) = tok.start, tok.end
+                for row in range(start_row, end_row + 1):
+                    idx = row - 1
+                    if idx < 0 or idx >= len(chars):
+                        continue
+                    begin = start_col if row == start_row else 0
+                    finish = end_col if row == end_row else len(chars[idx])
+                    for col in range(begin, min(finish, len(chars[idx]))):
+                        chars[idx][col] = " "
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            # 文件不是合法 Python 时退回「不屏蔽」——宁可误报，不可漏报。
+            pass
+        return ["".join(row) for row in chars]
+
+    @classmethod
+    def _scan(cls, root: Path) -> tuple[list[str], int]:
+        """扫描 `root/app` 下的 .py，返回 (违规行列表, 实际扫描文件数)。"""
         offenders: list[str] = []
+        scanned = 0
         for path in sorted((root / "app").rglob("*.py")):
             rel = path.relative_to(root).as_posix()
-            if rel in self._EXEMPT_FILES:
+            if rel in cls._EXEMPT_FILES:
                 continue
-            for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-                code = line.split("#", 1)[0]
-                if any(token in code for token in self._FORBIDDEN):
-                    offenders.append(f"{rel}:{no}: {line.strip()}")
+            scanned += 1
+            text = path.read_text(encoding="utf-8")
+            raw_lines = text.splitlines()
+            code_lines = cls._mask_strings_and_comments(text)
+            for no, code in enumerate(code_lines, 1):
+                if any(token in code for token in cls._FORBIDDEN):
+                    raw = raw_lines[no - 1] if no <= len(raw_lines) else code
+                    offenders.append(f"{rel}:{no}: {raw.strip()}")
+        return offenders, scanned
+
+    @classmethod
+    def _check(cls, root: Path) -> list[str]:
+        """运行扫描并校验扫描面下限，返回违规行列表。"""
+        offenders, scanned = cls._scan(root)
+        assert scanned >= cls._MIN_SCANNED_FILES, (
+            f"只扫到 {scanned} 个文件（下限 {cls._MIN_SCANNED_FILES}）："
+            "路径算错或 app/ 不在预期位置，守卫会静默空转。"
+        )
+        return offenders
+
+    def test_app_has_no_virtual_key_id_references(self):
+        offenders = self._check(Path(__file__).resolve().parents[1])
         assert offenders == [], (
             "写归属用 auth.owner_id（超管落 NULL），读过滤用 auth.scope_clause：\n"
             + "\n".join(offenders)
@@ -199,3 +261,43 @@ class TestNoVirtualKeyIdWrites:
 
     def test_exemption_surface_is_single_file(self):
         assert TestNoVirtualKeyIdWrites._EXEMPT_FILES == {"app/core/auth_context.py"}
+
+    def test_docstring_and_comment_mentions_are_not_offenders(self, tmp_path):
+        app = tmp_path / "app" / "api"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text(
+            '"""模块文档：不要写 api_key_id=auth.id，超管下会外键 500。"""\n'
+            "# 注释里提到 auth.id 也不算违规\n"
+            "X = 1\n",
+            encoding="utf-8",
+        )
+        offenders, scanned = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert scanned == 1
+        assert offenders == []
+
+    def test_real_code_is_still_caught(self, tmp_path):
+        app = tmp_path / "app" / "api"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text("X = auth.id\nY = api_key.id\n", encoding="utf-8")
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert offenders == [
+            "app/api/demo.py:1: X = auth.id",
+            "app/api/demo.py:2: Y = api_key.id",
+        ]
+
+    def test_expression_inside_fstring_is_caught(self, tmp_path):
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text('Z = f"owner={auth.id}"\n', encoding="utf-8")
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert offenders == ['app/demo.py:1: Z = f"owner={auth.id}"']
+
+    def test_empty_scan_is_a_failure_not_a_pass(self, tmp_path):
+        (tmp_path / "app").mkdir()
+        with pytest.raises(AssertionError, match="只扫到 0 个文件"):
+            TestNoVirtualKeyIdWrites._check(tmp_path)
+
+    def test_real_app_surface_meets_lower_bound(self):
+        root = Path(__file__).resolve().parents[1]
+        _offenders, scanned = TestNoVirtualKeyIdWrites._scan(root)
+        assert scanned >= TestNoVirtualKeyIdWrites._MIN_SCANNED_FILES
