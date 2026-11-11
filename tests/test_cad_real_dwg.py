@@ -20,10 +20,31 @@ if str(ROOT) not in sys.path:
 
 REAL_DWG = ROOT / "tests" / "fixtures" / "cad" / "real_sample.dwg"
 
-pytestmark = pytest.mark.skipif(
-    not REAL_DWG.exists(),
-    reason="real_sample.dwg fixture 不存在（含专有真实数据，可选拷贝）",
-)
+
+def _converter_unavailable() -> bool:
+    """LibreDWG dwg2dxf 是否缺席（tools/libredwg 未部署且 PATH 无该命令）。
+
+    fixture `real_sample.dwg` 已入库，但 `dwg2dxf` 是外部二进制（Win64 exe + DLL），
+    不进仓库也不在 CI 运行器上 → 干净环境里 `dwg_to_dxf()` 必然返回 None。
+    这类「工具未部署」属于环境缺省而非产品缺陷，用 skip 表达（2026-11-11）。
+    """
+    try:
+        from app.services.dwg_converter import is_dwg_converter_available
+    except Exception:  # 导入失败同样视为环境不满足
+        return True
+    return not is_dwg_converter_available()
+
+
+pytestmark = [
+    pytest.mark.skipif(
+        not REAL_DWG.exists(),
+        reason="real_sample.dwg fixture 不存在（含专有真实数据，可选拷贝）",
+    ),
+    pytest.mark.skipif(
+        _converter_unavailable(),
+        reason="LibreDWG dwg2dxf 未部署（tools/libredwg/ 或 PATH），跳过真实 DWG 链路",
+    ),
+]
 
 
 @pytest.fixture(scope="module")
