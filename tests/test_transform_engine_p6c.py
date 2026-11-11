@@ -23,8 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.services import transform_engine as te
 from app.services.custom_crs import SridResolution
 from app.services.transform_engine import ResolvedCRS, TransformStats
+from tests.conftest import sync_test_db_url
 
-SYNC_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/vcs_test"
+# 凭据随环境（CI=vcs/testpass，本地=postgres/postgres），库名固定 vcs_test
+SYNC_URL = sync_test_db_url()
 
 WGS = ResolvedCRS(srid=4326, pyproj_crs="EPSG:4326", epsg=4326,
                   is_custom=False, source="epsg", display="EPSG:4326")
