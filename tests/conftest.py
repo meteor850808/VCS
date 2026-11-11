@@ -15,11 +15,37 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.main import app
+from app.config import settings
 from app.db.session import Base, get_db
 from app import models  # noqa: F401  导入全部 ORM 模型注册到 Base.metadata
 
 # ── 测试数据库（独立测试库 vcs_test，需 PostGIS） ──────────────────────────────
-TEST_DB_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/vcs_test"
+# 凭据不写死：CI 的 PG 服务容器是 vcs/testpass（workflow 通过 DATABASE_URL 注入），
+# 本地开发库是 postgres/postgres。原先硬编码 postgres:postgres 让 CI 出现
+# 694 例 `asyncpg.InvalidPasswordError: password authentication failed for user "postgres"`
+# （2026-11-11 实证）。这里从 settings.database_url 派生，并强制库名为 vcs_test，
+# 避免被误配成生产库后 create_all/drop_all 打到真实数据。
+_TEST_DB_NAME = "vcs_test"
+
+
+def test_db_url(driver: str = "postgresql+asyncpg") -> str:
+    """由 `settings.database_url` 派生测试库 URL（主机/凭据同环境，库名固定 vcs_test）。"""
+    from sqlalchemy.engine import make_url
+
+    base = make_url(settings.database_url)
+    if not base.drivername.startswith("postgresql"):  # pragma: no cover — 非 PG 不走本仓测试
+        return settings.database_url
+    return base.set(drivername=driver, database=_TEST_DB_NAME).render_as_string(
+        hide_password=False
+    )
+
+
+def sync_test_db_url() -> str:
+    """同步版测试库 URL（psycopg2 驱动；Celery/同步服务测试用）。"""
+    return test_db_url("postgresql+psycopg2")
+
+
+TEST_DB_URL = test_db_url()
 _test_engine = create_async_engine(TEST_DB_URL, echo=False, pool_pre_ping=True)
 _TestSession = async_sessionmaker(_test_engine, class_=AsyncSession, expire_on_commit=False)
 

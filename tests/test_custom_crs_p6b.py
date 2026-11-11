@@ -22,8 +22,10 @@ from sqlalchemy.orm import Session
 from types import SimpleNamespace
 
 from app.services import custom_crs as qc
+from tests.conftest import sync_test_db_url
 
-SYNC_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/vcs_test"
+# 凭据随环境（CI=vcs/testpass，本地=postgres/postgres），库名固定 vcs_test
+SYNC_URL = sync_test_db_url()
 
 # 无 EPSG、pyproj 可解析的投影字符串（自测专用内容 → srid 稳定唯一）
 CUSTOM_PROJ4 = (
