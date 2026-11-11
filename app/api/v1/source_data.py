@@ -91,7 +91,7 @@ async def create_source_table(
     api_key: ApiKey = Depends(authenticated),
 ):
     table = SourceTable(
-        id=str(uuid.uuid4()), api_key_id=api_key.id,
+        id=str(uuid.uuid4()), api_key_id=api_key.owner_id,
         table_name=body.table_name, table_code=body.table_code,
         description=body.description, geometry_type=body.geometry_type,
         source=body.source, version=body.version,
@@ -245,7 +245,7 @@ async def create_dictionary(
     api_key: ApiKey = Depends(authenticated),
 ):
     d = StandardDictionary(
-        id=str(uuid.uuid4()), api_key_id=api_key.id,
+        id=str(uuid.uuid4()), api_key_id=api_key.owner_id,
         dict_name=body.dict_name, dict_code=body.dict_code,
         description=body.description,
     )

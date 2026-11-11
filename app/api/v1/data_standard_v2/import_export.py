@@ -161,7 +161,7 @@ async def import_standard_json(
 
     std = DataStandard(
         id=str(_uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         code=code,
         name=name,
         description=description,
@@ -420,7 +420,7 @@ async def import_standard_excel(
 
     std = DataStandard(
         id=str(_uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         name=name,
         description=description,
         category=category,
@@ -545,7 +545,7 @@ async def _import_from_v2(db, api_key, mode, name, description, category, filena
 
     std = DataStandard(
         id=str(_uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         code=code,
         name=import_name,
         description=description or v2_result.description,
@@ -916,7 +916,7 @@ async def import_standard_csv(
 
     std = DataStandard(
         id=str(_uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         name=name,
         description=description,
         category=category,
@@ -1254,7 +1254,7 @@ async def _create_csv_children_from_archive(
                 warnings.append(f"字典第 {idx + 1} 行缺少字典编码，已跳过")
                 continue
             dictionary = StandardDictionary(
-                id=str(_uuid.uuid4()), standard_id=standard_id, api_key_id=api_key.id,
+                id=str(_uuid.uuid4()), standard_id=standard_id, api_key_id=api_key.owner_id,
                 dict_code=code, dict_name=_csv_cell(row, 1) or code,
                 scope=_csv_cell(row, 2) or "standard",
                 description=_csv_cell(row, 3) or None)

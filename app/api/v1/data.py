@@ -318,7 +318,7 @@ async def upload_file(
     archive_id = str(uuid.uuid4())
     archive_record = StoredFile(
         id=archive_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         original_name=file.filename,
         layer_name=Path(file.filename).stem,
         content_type=file.content_type or "application/octet-stream",
@@ -377,7 +377,7 @@ async def upload_file(
             new_std_id = str(uuid.uuid4())
             new_std = DataStandard(
                 id=new_std_id,
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 name=standard_name or f"{Path(file.filename).stem} 数据标准",
                 description=f"上传 {file.filename} 时自动创建",
                 category="auto",
@@ -456,7 +456,7 @@ async def upload_file(
 
         try:
             mdb_results = extract_mdb_to_stored_files(
-                content, filename=file.filename, api_key_id=api_key.id,
+                content, filename=file.filename, api_key_id=api_key.owner_id,
                 max_bytes=settings.max_data_store_size_mb * 1024 * 1024,
             )
         except Exception as e:
@@ -491,8 +491,8 @@ async def upload_file(
                 # MDB 内部坐标系（GDB_SpatialRefs.SRTEXT）解析入库 SRID，
                 # 避免 GK 米制坐标被当作 WGS84 (4326) 写入
                 srid = await _ingest_srid(sf, db)
-                # Use owner_id (not api_key.id) because _load_mdb_features_async
-                # expects the FK reference to the users table for spatial feature ownership.
+                # 用 owner_id（超管 → NULL）而非虚拟 Key ID：要素分表的
+                # api_key_id 是 api_keys 外键，虚拟 ID 不在表内会 FK 失败。
                 # 直接传递 features 列表，跳过 Fiona 重新解析（优化双重 GeoJSON 解析）
                 sub_tasks.append(_load_mdb_features_async(
                     sf.id, table_name=Path(sf.original_name).stem,
@@ -595,7 +595,7 @@ async def upload_file(
                 gdb_files=gdb_files,
                 gdb_dir=gdb_dir,
                 archive_filename=file.filename,
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 standard_id=standard_id,
                 standard_table_id=standard_table_id,
                 resolved_standard_name=resolved_standard_name,
@@ -626,7 +626,7 @@ async def upload_file(
             # 创建 StoredFile（仅 .shp 主文件）
             shp_sf = StoredFile(
                 id=shp_file_id,
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 original_name=f"{file.filename}/{shp_ef.original_name}",
                 layer_name=Path(shp_ef.original_name).stem,
                 content_type=_guess_mime(shp_ef.original_name),
@@ -658,7 +658,7 @@ async def upload_file(
         for ef in classified.vectors:
             stored = StoredFile(
                 id=str(uuid.uuid4()),
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 original_name=f"{file.filename}/{ef.original_name}",
                 layer_name=Path(ef.original_name).stem,
                 content_type=_guess_mime(ef.original_name),
@@ -686,7 +686,7 @@ async def upload_file(
         for ef in classified.tables:
             stored = StoredFile(
                 id=str(uuid.uuid4()),
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 original_name=f"{file.filename}/{ef.original_name}",
                 layer_name=Path(ef.original_name).stem,
                 content_type=_guess_mime(ef.original_name),
@@ -1034,7 +1034,7 @@ async def merge_chunks(
     file_id = str(uuid.uuid4())
     sf = StoredFile(
         id=file_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         original_name=filename,
         layer_name=Path(filename).stem,
         content_type=_guess_mime(filename),
@@ -1091,7 +1091,7 @@ async def merge_chunks(
                 gdb_files=gdb_files,
                 gdb_dir=gdb_dir,
                 archive_filename=filename,
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 standard_id=standard_id,
                 standard_table_id=standard_table_id,
                 resolved_standard_name=standard_name,
@@ -1112,7 +1112,7 @@ async def merge_chunks(
             shp_file_id = str(uuid.uuid4())
             shp_sf = StoredFile(
                 id=shp_file_id,
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 original_name=f"{filename}/{shp_ef.original_name}",
                 layer_name=Path(shp_ef.original_name).stem,
                 content_type=_guess_mime(shp_ef.original_name),
@@ -1144,7 +1144,7 @@ async def merge_chunks(
         for ef in classified.vectors:
             stored = StoredFile(
                 id=str(uuid.uuid4()),
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 original_name=f"{filename}/{ef.original_name}",
                 layer_name=Path(ef.original_name).stem,
                 content_type=_guess_mime(ef.original_name),
@@ -1172,7 +1172,7 @@ async def merge_chunks(
         for ef in classified.tables:
             stored = StoredFile(
                 id=str(uuid.uuid4()),
-                api_key_id=api_key.id,
+                api_key_id=api_key.owner_id,
                 original_name=f"{filename}/{ef.original_name}",
                 layer_name=Path(ef.original_name).stem,
                 content_type=_guess_mime(ef.original_name),
@@ -2047,9 +2047,10 @@ def _sync_load_gdb_layer(
     多个 GDB 层子任务并发 to_thread 同时 fiona.open 同一 GDB 目录会抛
     Permission denied（CPLE_OpenFailedError）导致要素静默为 0；
     以 GDB 路径为粒度互斥，保证同一 GDB 的读取串行化。
-    v2.10.1：api_key_id 参数实际接收 api_key.owner_id（super admin → None）——
-    分表 api_key_id 列对外键校验 api_keys 表，虚拟 id 不存在会 FK 失败；
-    StoredFile 记录则始终用 api_key.id（见 _handle_gdb_group）。
+    v2.10.1：api_key_id 参数接收 api_key.owner_id（super admin → None）——
+    分表 api_key_id 列对外键校验 api_keys 表，虚拟 id 不存在会 FK 失败。
+    v2.23：StoredFile 记录同样改用 owner_id（见 _handle_gdb_group），
+    超管不再向 conversion_jobs/stored_files 写入不存在的 Key ID。
     v2.10.5：srid 由调用方（_handle_gdb_group 主会话）预先解析注册后传入，
     本函数不再自行 crs_to_srid；写入完成后做坐标域一致性校验。
     """
@@ -2457,7 +2458,7 @@ async def check_stored_file_quality(
 
     # 立即缓存 api_key_id：run_quality_check 运行期间 topology_checker 可能
     # 触发 db.rollback()，导致 session 内所有 ORM 对象过期 → MissingGreenlet
-    api_key_id = api_key.id
+    api_key_id = api_key.owner_id
 
     check_result = await run_quality_check(
         db=db,
