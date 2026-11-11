@@ -163,7 +163,7 @@ async def quality_check_stored_file(
             cnt = (await db.execute(
                 select(func.count()).select_from(model).where(
                     model.stored_file_id == file_id,
-                    model.api_key_id == api_key.id,
+                    api_key.scope_clause(model),
                 )
             )).scalar() or 0
             actual += cnt
@@ -207,7 +207,7 @@ async def quality_check_stored_file(
 
     # 立即缓存 api_key_id：run_quality_check 运行期间 topology_checker 可能
     # 触发 db.rollback()，导致 session 内所有 ORM 对象过期 → MissingGreenlet
-    api_key_id = api_key.id
+    api_key_id = api_key.owner_id
 
     # 执行质检
     check_result = await run_quality_check(
@@ -336,7 +336,7 @@ async def quality_check_upload(
 
     # 立即缓存 api_key_id：run_quality_check 运行期间 topology_checker 可能
     # 触发 db.rollback()，导致 session 内所有 ORM 对象过期 → MissingGreenlet
-    api_key_id = api_key.id
+    api_key_id = api_key.owner_id
 
     # 优先使用新 orchestrator（如果指定了标准）
     if data_standard_id:
@@ -344,7 +344,7 @@ async def quality_check_upload(
         tmp_sf_id = str(uuid.uuid4())
         tmp_sf = StoredFile(
             id=tmp_sf_id,
-            api_key_id=api_key.id,
+            api_key_id=api_key.owner_id,
             original_name=file.filename,
             layer_name=Path(file.filename).stem,
             content_type=file.content_type or "application/octet-stream",
@@ -441,7 +441,7 @@ async def quality_check_upload(
     from app.core.db_utils import load_standard_fields
     standard_fields = None
     if data_standard_id:
-        standard_fields = await load_standard_fields(db, data_standard_id, api_key.id)
+        standard_fields = await load_standard_fields(db, data_standard_id, api_key.owner_id)
         if standard_fields is None:
             raise HTTPException(status_code=404, detail="数据标准不存在")
 
@@ -468,7 +468,7 @@ async def quality_check_upload(
 
     report = QualityReport(
         id=report_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         file_name=file.filename,
         detected_format=result.detected_format,
         total_features=result.total_features,

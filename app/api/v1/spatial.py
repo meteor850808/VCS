@@ -435,6 +435,6 @@ async def repair_spatial_features(
     if not sf or not api_key.owns(sf):
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    result = await repair_features_by_file(db, file_id, api_key.id)
+    result = await repair_features_by_file(db, file_id, api_key.owner_id)
     await db.commit()
     return {"file_id": file_id, **result}

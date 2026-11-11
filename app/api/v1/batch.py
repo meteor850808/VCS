@@ -54,7 +54,7 @@ async def submit_batch_conversion(
     # 创建 BatchJob
     batch = BatchJob(
         id=batch_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         name=f"批量转换 {len(files)} 文件",
         total_count=len(files),
         status=BatchJobStatus.PENDING,
@@ -79,7 +79,7 @@ async def submit_batch_conversion(
         # 创建子任务
         job = ConversionJob(
             id=job_id,
-            api_key_id=api_key.id,
+            api_key_id=api_key.owner_id,
             batch_job_id=batch_id,
             original_filename=file.filename,
             input_path=input_path,

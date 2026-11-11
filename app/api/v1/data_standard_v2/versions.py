@@ -177,7 +177,7 @@ async def publish_standard(
     version = StandardVersion(
         id=str(_uuid.uuid4()),
         standard_id=standard_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         version_number=std.version,
         version_label=f"v{std.version}",
         snapshot_data=snapshot,
@@ -300,7 +300,7 @@ async def rollback_version(
     rollback_version_rec = StandardVersion(
         id=str(_uuid.uuid4()),
         standard_id=standard_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         version_number=new_version_number,
         version_label=f"v{new_version_number}",
         snapshot_data=target_version.snapshot_data,

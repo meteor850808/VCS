@@ -20,8 +20,9 @@ class QualityRule(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    api_key_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("api_keys.id"), nullable=False, index=True
+    api_key_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("api_keys.id"), nullable=True, index=True,
+        comment="归属 Key；超级管理员创建/生成的规则为 NULL（虚拟 Key 无 api_keys 行）",
     )
     standard_field_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("standard_fields.id", ondelete="CASCADE"), nullable=True

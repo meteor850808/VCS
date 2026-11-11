@@ -76,7 +76,7 @@ async def create_rule(
 ):
     rule = QualityRule(
         id=str(uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         standard_field_id=body.standard_field_id,
         rule_type=body.rule_type,
         rule_name=body.rule_name,
@@ -150,7 +150,7 @@ async def generate_rules(
             await db.delete(r)
 
     # 重新生成
-    rules = await generate_rules_for_standard(standard_id, api_key.id, db)
+    rules = await generate_rules_for_standard(standard_id, api_key.owner_id, db)
     for r in rules:
         db.add(r)
     await db.commit()

@@ -82,7 +82,7 @@ async def import_data_standard(
     std_name = name or Path(file.filename).stem
     standard = DataStandard(
         id=str(uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         name=std_name,
         description=description,
         file_name=file.filename,
@@ -103,7 +103,7 @@ async def import_data_standard(
         # 同时创建 SourceTable (源数据表)
         source_table = SourceTable(
             id=str(uuid.uuid4()),
-            api_key_id=api_key.id,
+            api_key_id=api_key.owner_id,
             standard_id=standard.id,
             table_name=sd.sheet_name,
             table_code=None,
@@ -160,7 +160,7 @@ async def import_data_standard(
     std_version = StandardVersion(
         id=str(uuid.uuid4()),
         standard_id=standard.id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         version_label="v1",
         change_log="初始导入",
         file_data=content,

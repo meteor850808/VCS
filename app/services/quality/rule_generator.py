@@ -22,14 +22,14 @@ from app.models.quality_rule import QualityRule
 
 def generate_rules_from_field(
     field: StandardField,
-    api_key_id: str,
+    api_key_id: str | None,
     mark_auto: bool = True,
 ) -> list[QualityRule]:
     """从单个 StandardField (v2) 生成一组 QualityRule。
 
     Args:
         field: 标准字段定义 (v2)。
-        api_key_id: 所属用户 ID。
+        api_key_id: 所属用户 ID；超级管理员为 None（质检规则允许归属为空）。
         mark_auto: 标记为自动生成。
 
     Returns:
@@ -126,14 +126,14 @@ def generate_rules_from_field(
 
 async def generate_rules_for_standard(
     standard_id: str,
-    api_key_id: str,
+    api_key_id: str | None,
     db_session,
 ) -> list[QualityRule]:
     """为整个数据标准生成质检规则（覆盖所有表的所有字段）。
 
     Args:
         standard_id: DataStandard.id。
-        api_key_id: 所属用户 ID。
+        api_key_id: 所属用户 ID；超级管理员为 None。
         db_session: SQLAlchemy async session（用于查询字段）。
 
     Returns:

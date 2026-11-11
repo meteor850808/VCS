@@ -155,7 +155,7 @@ async def create_standard(
     import uuid as _uuid
     std = DataStandard(
         id=str(_uuid.uuid4()),
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         code=body.code,
         name=body.name,
         description=body.description,
