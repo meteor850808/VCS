@@ -136,6 +136,7 @@ def run(args):
     results["checks"]["health"] = {"status": st}
     if st != 200:
         results["error"] = f"health returned {st}"
+        print(f"[FAIL] /health -> {st} {body}")
         return 1, results
     print(f"[OK] /health -> {st}")
 
@@ -144,6 +145,7 @@ def run(args):
     results["checks"]["jobs_list"] = {"status": st}
     if st != 200:
         results["error"] = f"jobs list returned {st}"
+        print(f"[FAIL] GET /api/v1/jobs -> {st} {jobs}")
         return 1, results
     print(f"[OK] GET /api/v1/jobs -> {st} ({len(jobs)} 条)")
 
@@ -163,6 +165,7 @@ def run(args):
     results["checks"]["convert_submit"] = {"status": st, "body": submit}
     if st != 202 or not submit or "job_id" not in submit:
         results["error"] = f"convert submit failed: {st} {submit}"
+        print(f"[FAIL] POST /api/v1/convert -> {st} {submit}")
         return 1, results
     job_id = submit["job_id"]
     results["job_id"] = job_id
@@ -198,6 +201,7 @@ def run(args):
     #    是否可用，故不把 failed 当作冒烟失败——但若是 pending 卡死则算失败。
     if status not in terminal:
         results["error"] = f"job 未进入终态（{status}）"
+        print(f"[FAIL] job 未进入终态（{status}），超时 {args.timeout}s")
         return 1, results
     print(f"[PASS] 全链路冒烟通过（job={job_id} status={status}）")
     return 0, results
