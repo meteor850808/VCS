@@ -36,6 +36,9 @@
 **归属列写入一律用 `AuthContext.owner_id`；读取一律用 `scope_clause()` / `owns()`。
 `api_key.id` 不再出现在 `app/api/v1/` 的归属读写中，并由静态扫描测试守住。**
 
+> 注（2026-11-11）：静态守卫的**范围与禁令牌已扩展**——扫描 `app/` 全目录、同时禁
+> `auth.id`、唯一豁免 `app/core/auth_context.py`。原文保留不改，详见文末「补充」。
+
 配套：
 1. `quality_rules.api_key_id` 放宽为 `nullable=True`（模型 + 迁移
    `0015_quality_rule_owner_nullable`），使「超管规则」这个真实存在的状态可被表达；
@@ -45,6 +48,7 @@
 3. 新增 `tests/test_super_admin_ownership_p8.py`：6 个写端点断言落 NULL +
    对 `app/api/v1/**/*.py` 的静态扫描（出现 `api_key.id` 即失败），
    防止新代码把虚拟 ID 写回来。
+   （2026-11-11 注：范围已扩至 `app/**/*.py`，禁令牌增加了 `auth.id`，见文末补充。）
 4. `quality.py` 要素计数改 `api_key.scope_clause(model)`：超管 `true()`
    不过滤、普通 Key 按可达 ID 过滤，语义与列表查询一致。
 
@@ -80,3 +84,21 @@
    → 需引入显式「系统归属」维度而非 NULL。
 3. 新增的 `api_key_id` 外键列默认 NOT NULL 且需要超管写入 → 新列必须同时放宽可空，
    否则本 ADR 的「一律 owner_id」约定会被迫破例。
+
+## 补充（2026-11-11）：静态守卫扩面至 `app/` 并覆盖 `auth.id`
+
+上文「决策」段的表述已被后续实现取代。ADR 是历史记录，故不改写原文，在此补充：
+
+- **扫描范围**：`app/api/v1/` → `app/` 全目录，扫描 `app/` 下全部 `.py`（当前约 126 个）。
+  实现见 `tests/test_super_admin_ownership_p8.py::TestNoVirtualKeyIdWrites._scan`。
+- **禁令牌**：`{api_key.id, auth.id}`。原因：`AuthContext.id` 直接委托 `api_key.id`
+  （`app/core/auth_context.py`），超管下同样返回虚拟 ID `00000000-...-0001`；
+  只禁 `api_key.id` 会漏掉写 `auth.id` 的等价违规。
+- **唯一豁免**：`app/core/auth_context.py`（该文件职责就是产出 `id` / `owner_id`）。
+  由 `test_exemption_surface_is_single_file` 钉住——新增第二个豁免必须同时改断言，
+  从而在 review 中显形。
+- **精确度**：扫描先用标准库 `tokenize` 屏蔽字符串与注释，再做包含匹配。文档/注释里
+  提到 `auth.id` 不再误报；f-string 内的表达式（如 `f"{auth.id}"`）仍会被抓到。
+- **非空校验**：`_check()` 断言实际扫描文件数 ≥ 100，避免路径算错时守卫静默空转。
+- **已知限制**：匹配仍是子串式（`oauth.id` 会被误判为违规）；变量中转
+  （`x = auth.id` 再 `api_key_id=x`）仍可绕过。守卫是兜底，不做 AST 分析。
