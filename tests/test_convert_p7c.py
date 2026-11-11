@@ -179,6 +179,33 @@ class TestRedisFallback:
         assert "Redis" in resp.json()["message"]
 
 
+class TestSuperAdminOwnership:
+    """超级管理员写归属列必须落 NULL（虚拟 Key 无 api_keys 行）。
+
+    回归：2026-11-11 CI smoke 在 `POST /api/v1/convert` 稳定 500 ——
+    `ForeignKeyViolationError: conversion_jobs_api_key_id_fkey`，
+    DETAIL 为虚拟 ID `00000000-0000-0000-0000-000000000001` 不在 api_keys 表。
+    根因是写入 `api_key.id` 而非 `api_key.owner_id`。
+    """
+
+    async def test_submit_as_super_admin_writes_null_owner(
+            self, client, db_session, monkeypatch):
+        monkeypatch.setattr(cv, "redis_available", lambda: True)
+        monkeypatch.setattr(run_conversion, "apply_async", lambda *a, **k: None)
+        content = json.dumps(SAMPLE_GEOJSON).encode()
+        resp = await client.post(
+            "/api/v1/convert",
+            headers={"X-API-Key": settings.admin_init_key},
+            data={"dst_crs": "EPSG:4490", "output_format": "GeoJSON"},
+            files={"file": ("admin.geojson", io.BytesIO(content),
+                            "application/json")},
+        )
+        assert resp.status_code == 202, resp.text
+        job = await db_session.get(ConversionJob, resp.json()["job_id"])
+        assert job is not None
+        assert job.api_key_id is None, job.api_key_id
+
+
 class TestRmTree:
 
     def test_dir_removed(self, tmp_path):
