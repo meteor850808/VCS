@@ -48,6 +48,25 @@ class Settings(BaseSettings):
     admin_init_key: str = ""
     cors_origins: list[str] = ["*"]
 
+    @field_validator("database_url_sync")
+    @classmethod
+    def _make_sync_driver_explicit(cls, v: str) -> str:
+        """把无驱动名的 `postgresql://` 显式改写为 `postgresql+psycopg2://`。
+
+        背景（2026-11-11，CI 实测）：SQLAlchemy 2.1 起，`postgresql://` 的默认
+        DBAPI 从 psycopg2 变为 psycopg（v3）；而 requirements.txt 只声明了
+        psycopg2-binary，于是 CI（sqlalchemy 2.1.8）在导入 app/db/session.py
+        时就 `ModuleNotFoundError: No module named 'psycopg'`（exit code 4）。
+        本地为 sqlalchemy 2.0.49，仍走 psycopg2，故长期未暴露。
+
+        显式驱动名让行为不随 SQLAlchemy 版本默认值漂移，并与仓库已声明的依赖
+        （psycopg2-binary）及 tests/test_custom_crs_p6b.py 等既有
+        `postgresql+psycopg2://` 用法一致。SQLite（本地脚手架）原样返回。
+        """
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg2://" + v[len("postgresql://"):]
+        return v
+
     @field_validator("admin_init_key")
     @classmethod
     def _admin_init_key_must_be_strong(cls, v: str) -> str:

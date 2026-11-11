@@ -146,6 +146,32 @@ class TestConfig:
         s = Settings(admin_init_key="s-strong-1234567890abcdef-xyz")
         assert s.admin_init_key.startswith("s-strong")
 
+    def test_sync_url_driver_made_explicit(self):
+        """无驱动名的 `postgresql://` 必须显式落到 psycopg2。
+
+        SQLAlchemy 2.1 起 `postgresql://` 默认 DBAPI 改为 psycopg（v3），而依赖只声明
+        psycopg2-binary → CI 在 import 阶段即 ModuleNotFoundError（2026-11-11 实证）。
+        """
+        s = Settings(
+            admin_init_key="s-strong-1234567890abcdef-xyz",
+            database_url_sync="postgresql://u:p@h:5432/db",
+        )
+        assert s.database_url_sync == "postgresql+psycopg2://u:p@h:5432/db"
+
+    def test_sync_url_explicit_driver_kept(self):
+        s = Settings(
+            admin_init_key="s-strong-1234567890abcdef-xyz",
+            database_url_sync="postgresql+psycopg2://u:p@h:5432/db",
+        )
+        assert s.database_url_sync == "postgresql+psycopg2://u:p@h:5432/db"
+
+    def test_sync_url_sqlite_untouched(self):
+        s = Settings(
+            admin_init_key="s-strong-1234567890abcdef-xyz",
+            database_url_sync="sqlite:///./t.db",
+        )
+        assert s.database_url_sync == "sqlite:///./t.db"
+
 
 # ── logging_setup ─────────────────────────────────────────────────────────────
 
