@@ -67,6 +67,8 @@
 
 ### Task 1: P0 — 修正第五维名称与清理字节码残留
 
+> **状态**：complete（commit `d1fa6cb..28a71f9`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
+
 **Files:**
 - Modify: `README.md:717`
 - Modify: `BASELINE.md:551`
@@ -128,6 +130,8 @@ git commit -m "docs: 第五维名称由「及时性」更正为「拓扑」"
 ---
 
 ### Task 2: P1 — 阈值与判定收敛到 config + derive_verdict
+
+> **状态**：complete（commit `28a71f9..e9cf603`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `app/config.py`（在 `sandbox_limit: int = 1000` 之后追加）
@@ -214,6 +218,8 @@ git commit -m "feat(quality): 判定阈值收敛到 config 并新增 derive_verd
 
 ### Task 3: P1 — 扩展响应模型（可为空与会话诊断字段）
 
+> **状态**：complete（commit `e9cf603..5f60985`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
+
 **Files:**
 - Modify: `app/schemas/quality.py:39-65`（两个 item 模型）、`:77-84`（`DimensionScores`）、`:100-122`（`QualityCheckResponse`）、`:125-152`（`QualityReportBrief`）、`:155-196`（`QualityReportDetail`）
 - Test: `tests/test_scoring_v3.py`
@@ -280,6 +286,8 @@ git commit -m "feat(schema): 五维分可空并新增 verdict/evaluated/violatio
 ---
 
 ### Task 4: P1 — 修正 total_features 与列表语义、补响应派生字段
+
+> **状态**：complete（commit `5f60985..dab3ef8`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `app/services/quality_checker.py:216-224`（返回值）、`:140-154`（空文件守卫返回值）
@@ -348,6 +356,8 @@ git commit -m "fix(quality): total_features 取要素数，issues_count 只统�
 
 ### Task 5: P1 — 后端读路径统一（详情 + HTML 报告）
 
+> **状态**：complete（commit `dab3ef8..a8808ee`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
+
 **Files:**
 - Modify: `app/api/v1/quality.py:60-72`（`_overall_from_scores` 之后新增 `_resolve_overall`）
 - Modify: `app/api/v1/quality.py:512-553`（详情端点）
@@ -401,6 +411,8 @@ git commit -m "fix(quality): HTML 报告改读 score_overall 并按 verdict 着�
 ---
 
 ### Task 6: P1 — Excel 导出的综合分改读 score_overall
+
+> **状态**：complete（commit `a8808ee..ed3e008`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `app/services/quality_exporter.py:269-273`
@@ -457,6 +469,8 @@ git commit -m "fix(export): Excel 综合分改读 score_overall 并标注未评�
 ---
 
 ### Task 7: P1 — 前端统一渲染与清除阈值字面量
+
+> **状态**：complete（commit `ed3e008..0bbd028`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `app/frontend/app.js:1135-1139`、`:1356-1362`、`:1393-1394`、`:2267-2276`
@@ -529,6 +543,8 @@ git commit -m "refactor(frontend): 评分渲染收敛到 scoreView/dimCard，移
 ---
 
 ### Task 8: P2 — 迁移 0014 与 ORM 模型
+
+> **状态**：complete（commit `0bbd028..90cd713`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Create: `alembic/versions/0014_scoring_profile.py`
@@ -638,6 +654,8 @@ git commit -m "feat(db): 0014 新增 scoring_profile/score_evaluated/evaluation_
 
 ### Task 9: P2 — 结果级 denominator_scope
 
+> **状态**：complete（commit `90cd713..5da332c`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
+
 **Files:**
 - Modify: `app/services/quality/attribute_checker.py:76-90`（`CheckResult`）
 - Modify: `app/services/topology_checker.py:59-73`（`TopologyCheckResult`）、`:515-540`（`_make_result`）
@@ -698,6 +716,8 @@ git commit -m "feat(quality): 检查结果新增 denominator_scope 描述分母�
 ---
 
 ### Task 10: P2 — 补结构三项与 T01 的分子分母、标记 T11 截断
+
+> **状态**：complete（commit `5da332c..238c067`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `app/services/quality/attribute_checker.py:250-272`（A1）、`:293-310`（A2）、`:316-339`（A3）
@@ -773,6 +793,8 @@ git commit -m "feat(quality): 结构三项与 T01 补分母，T11 标记截断�
 ---
 
 ### Task 11: P3 — 切换 v3 聚合、诊断规则与 profile 落库
+
+> **状态**：complete（commit `238c067..303aaca`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `app/services/quality_checker.py:45-91`（`compute_scores` → v2/v3）
@@ -925,6 +947,8 @@ git commit -m "feat(quality)!: 切换到要素级评分口径 v3，T06-T10 降�
 ---
 
 ### Task 12: P4 — 文档与发版
+
+> **状态**：complete（commit `303aaca..3e9b40c`）— 完成证据以 `.superpowers/sdd/2026-11-10-quality-scoring-optimization/progress.md` ledger 为准；下方步骤复选框保留初始计划原貌，不逐条勾选。
 
 **Files:**
 - Modify: `BASELINE.md`（§3/§4/§5/§15：五列可空、三新列、口径说明）
