@@ -104,9 +104,13 @@ async def submit_conversion(
     fields_list = [f.strip() for f in select_fields.split(',')] if select_fields else None
 
     # 写入 DB
+    # 归属列必须写 owner_id：超级管理员（ADMIN_INIT_KEY）是虚拟 ApiKey，没有对应
+    # api_keys 行，写入它的虚拟 ID 会触发 conversion_jobs_api_key_id_fkey 外键冲突
+    # → 整个 POST /convert 返回 500（2026-11-11 CI smoke 实证）。owner_id 对超管
+    # 返回 None，对普通 Key 返回真实 ID，两态都合法（该列 nullable）。
     job = ConversionJob(
         id=job_id,
-        api_key_id=api_key.id,
+        api_key_id=api_key.owner_id,
         original_filename=file.filename,
         input_path=input_path,
         output_path=output_path,
