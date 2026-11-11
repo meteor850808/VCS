@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -56,7 +57,7 @@ class QualityReport(Base):
     topology_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="{total,passed,failed,by_rule:{...}}")
     topology_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="拓扑检查配置快照")
     checked_layers: Mapped[list | None] = mapped_column(
-        JSON, nullable=True,
+        JSONB, nullable=True,
         comment="质检圈定的图层名列表（v2.10.5）；NULL=全部图层",
     )
     # ── 新增：五维评分（v3 起可为 NULL：NULL=该维度本轮未评价，不是 0 分）──
@@ -77,10 +78,10 @@ class QualityReport(Base):
         comment="口径版本：v2=条目通过率，v3=要素级派生",
     )
     score_evaluated: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, comment="{维度: 是否已评价}",
+        JSONB, nullable=True, comment="{维度: 是否已评价}",
     )
     evaluation_errors: Mapped[list | None] = mapped_column(
-        JSON, nullable=True, comment="规则执行异常清单",
+        JSONB, nullable=True, comment="规则执行异常清单",
     )
     html_report_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     json_report_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)

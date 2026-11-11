@@ -22,7 +22,7 @@ class QualityRule(Base):
     )
     api_key_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("api_keys.id"), nullable=True, index=True,
-        comment="归属 Key；超级管理员创建/生成的规则为 NULL（虚拟 Key 无 api_keys 行）",
+        comment="归属 Key；超级管理员创建/生成的规则为 NULL",
     )
     standard_field_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("standard_fields.id", ondelete="CASCADE"), nullable=True

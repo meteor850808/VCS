@@ -69,7 +69,7 @@ class _FeatureBase:
         String(36), primary_key=True, nullable=False, index=True,
         comment="数据源/文件 ID，也是 LIST 分区键（每源一个分区）",
     )
-    api_key_id: Mapped[str] = mapped_column(
+    api_key_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True, index=True
     )
     layer_name: Mapped[str] = mapped_column(String(256), nullable=False)

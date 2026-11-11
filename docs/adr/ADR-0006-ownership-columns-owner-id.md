@@ -60,7 +60,11 @@
 
 ## 后果
 
-- **正面**：超管全链路可用（转换、上传、标准 CRUD、发布版本、规则生成、质检、几何修复）；
+- **正面**：已在运行时实测转换（CI smoke `POST /api/v1/convert`）与 6 个写端点
+  （`POST /quality-rules`、`POST /quality-rules/generate/{id}`、`POST /source-tables`、
+  `POST /source-dictionaries`、`POST /data-standards-v2`、
+  `POST /data-standards-v2/{id}/publish`）不再因虚拟 Key 触发外键错误；其余写入路径
+  （上传、质检、几何修复等）由 `app/api/v1` 静态扫描守卫覆盖，**未逐一做运行时实测**；
   归属语义统一为「NULL = 系统/超管操作」，与 `ondelete="SET NULL"` 天然兼容。
 - **负面/权衡**：`quality_rules` 出现 NULL 归属行后，按 `api_key_id` 分组的统计需要
   显式处理 NULL 桶；`uq_ds_api_name` / `uq_ds_api_code` 这类含 `api_key_id` 的唯一约束

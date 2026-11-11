@@ -43,6 +43,16 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# PostGIS/扩展自带的表不归本项目模型管理，autogenerate / alembic check 时排除，
+# 避免把 spatial_ref_sys 误判为 remove_table。仅影响差异比较，不影响运行时。
+_EXCLUDE_TABLES = {"spatial_ref_sys", "geography_columns", "geometry_columns"}
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name in _EXCLUDE_TABLES:
+        return False
+    return True
+
 
 def run_migrations_offline() -> None:
     """离线模式迁移（生成 SQL 脚本）。"""
@@ -50,6 +60,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -58,7 +69,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
