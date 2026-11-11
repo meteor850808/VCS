@@ -11,12 +11,16 @@ import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-ROOT = Path(r"C:\Users\Administrator\Desktop\AI项目\空间质检")
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import pytest  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
 
-from app.api.v1.data_standard_v2._common import _conflict_detail  # noqa: E402
+from app.api.v1.data_standard_v2._common import (  # noqa: E402
+    _conflict_detail,
+    _extract_constraint_name,
+)
 from app.models.data_standard import DataStandard  # noqa: E402
 
 from tests.test_imp_exp_dict_roundtrip import _key  # noqa: E402
@@ -155,3 +159,50 @@ class TestConflictDetailTranslation:
         detail = _conflict_detail(None, "X")
         assert detail, "必须给出兜底文案"
         assert "标准名称" not in detail, detail
+
+
+class TestExtractConstraintName:
+    """约束名提取必须同时认中文与英文 PG 报错（服务端 lc_messages 不同）。
+
+    CI 的 postgis 容器是 en_US.utf8：报错文本为
+    `duplicate key value violates unique constraint "uq_st_layer_name"`；
+    本地 Windows PG 是中文「唯一约束 "uq_st_layer_name"」。只认中文会让
+    CI 上 7 例冲突文案用例退化为通用兜底（2026-11-11 实证）。
+    """
+
+    @staticmethod
+    def _integrity_error(orig: object) -> IntegrityError:
+        err = IntegrityError("INSERT ...", {}, Exception("wrapper"))
+        err.orig = orig  # sqlalchemy 允许赋值；模拟真实包装链
+        return err
+
+    def test_chinese_pg_message(self):
+        orig = Exception('违反了唯一约束"uq_st_layer_name"')
+        assert _extract_constraint_name(self._integrity_error(orig)) == "uq_st_layer_name"
+
+    def test_english_pg_message(self):
+        orig = Exception(
+            'duplicate key value violates unique constraint "uq_st_layer_name"\n'
+            'DETAIL:  Key (layer_id, table_name)=(1, 路面) already exists.'
+        )
+        assert _extract_constraint_name(self._integrity_error(orig)) == "uq_st_layer_name"
+
+    def test_english_foreign_key_message(self):
+        orig = Exception(
+            'insert or update on table "standard_table" violates foreign key '
+            'constraint "fk_st_layer"'
+        )
+        assert _extract_constraint_name(self._integrity_error(orig)) == "fk_st_layer"
+
+    def test_structured_asyncpg_attribute_wins(self):
+        orig = Exception("no text here")
+        orig.constraint_name = "uq_di_dict_code"  # asyncpg 0.30+ 的结构化属性
+        assert _extract_constraint_name(self._integrity_error(orig)) == "uq_di_dict_code"
+
+    def test_structured_psycopg2_diag_attribute(self):
+        orig = Exception("no text here")
+        orig.diag = type("Diag", (), {"constraint_name": "uq_sf_table_field"})()
+        assert _extract_constraint_name(self._integrity_error(orig)) == "uq_sf_table_field"
+
+    def test_unparseable_returns_none(self):
+        assert _extract_constraint_name(self._integrity_error(Exception("boom"))) is None
