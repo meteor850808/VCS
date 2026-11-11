@@ -57,19 +57,39 @@ _CONSTRAINT_ENTITY: dict[str, str] = {
     "uq_sfdl_field_dict": "字段与字典的绑定",
 }
 
-_CONSTRAINT_RE = re.compile(r'唯一约束\s*"([^"]+)"')
+# 中英双写：PG 的报错语言随服务端 lc_messages 变。本地 Windows PG 是中文
+# （「唯一约束 "uq_x"」），CI 的 postgis 容器是 en_US.utf8（`... unique
+# constraint "uq_x"`）—— 只匹配中文会让 CI 全部退化为通用文案
+# （2026-11-11 实证：7 例 test_import_conflict_messages / row_dedup 失败）。
+_CONSTRAINT_RES = (
+    re.compile(r'唯一约束\s*"([^"]+)"'),
+    re.compile(r"unique\s+constraint\s+\"([^\"]+)\"", re.IGNORECASE),
+    re.compile(r'外键约束\s*"([^"]+)"'),
+    re.compile(r"foreign\s+key\s+constraint\s+\"([^\"]+)\"", re.IGNORECASE),
+)
 
 
 def _extract_constraint_name(err: IntegrityError) -> str | None:
-    """从 IntegrityError 里取出 PG 唯一约束名；取不到返回 None。
+    """从 IntegrityError 里取出 PG 约束名；取不到返回 None。
 
-    asyncpg 的错误对象没有 `constraint_name` 属性，约束名只在 `str(e)` 里，
-    因此走文本匹配。这不是理想方案，但比谎报冲突原因安全得多 —— 取不到
-    时上层会退到通用文案。
+    先试结构化属性（psycopg2 在 `orig.diag.constraint_name`，asyncpg 0.30+
+    在 `orig.constraint_name`），取不到就退回文本匹配 —— 这比谎报冲突原因
+    安全得多：未知时上层退到通用文案，不会指向没冲突的字段。
     """
-    text = str(err.orig) if getattr(err, "orig", None) is not None else str(err)
-    m = _CONSTRAINT_RE.search(text)
-    return m.group(1) if m else None
+    orig = getattr(err, "orig", None)
+    if orig is not None:
+        for candidate in (
+            getattr(orig, "constraint_name", None),
+            getattr(getattr(orig, "diag", None), "constraint_name", None),
+        ):
+            if candidate:
+                return str(candidate)
+    text = str(orig) if orig is not None else str(err)
+    for pattern in _CONSTRAINT_RES:
+        m = pattern.search(text)
+        if m:
+            return m.group(1)
+    return None
 
 
 def _conflict_detail(constraint: str | None, value: str | None = None) -> str:

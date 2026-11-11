@@ -25,6 +25,14 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 REF_DIR = Path(r"C:\Users\Administrator\Desktop\AI项目\数据标准调整"
                r"\一厅八室数据标准-转换产出\json")
+
+# 参照物是外部真实数据（一厅八室），不入库也不在 CI 上：
+# 缺目录时整模块跳过，而不是逐个用例 FileNotFoundError（2026-11-11 实证 7 例红）。
+pytestmark = pytest.mark.skipif(
+    not REF_DIR.exists(),
+    reason=f"外部参照物目录不存在: {REF_DIR}（oracle 数据不入库）",
+)
+
 BASE = "/api/v1/data-standards-v2"
 
 # 模块级缓存：同一份参照物只导入一次（key 行落库后跨 session 有效）

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-ROOT = Path(r"C:\Users\Administrator\Desktop\AI项目\空间质检")
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import openpyxl  # noqa: E402
