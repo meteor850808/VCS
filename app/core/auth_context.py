@@ -7,8 +7,8 @@
 使用方式（向后兼容）：
     auth: AuthContext = Depends(authenticated)
 
-    # 创建记录时标记归属（用当前 key 的 id）
-    StoredFile(api_key_id=auth.id, ...)
+    # 创建记录时标记归属（超管落 NULL，故 api_key_id 列必须可空）
+    StoredFile(api_key_id=auth.owner_id, ...)
 
     # 查询时做范围过滤（兼容 group 共享）
     select(StoredFile).where(auth.scope_clause(StoredFile))
@@ -16,6 +16,9 @@
     # 权属检查
     if not sf or not auth.owns(sf):
         raise HTTPException(404)
+
+注意：不要写 `api_key_id=auth.id` —— 超管下 `auth.id` 是虚拟 ID，写库会触发外键冲突。
+（静态守卫 `tests/test_super_admin_ownership_p8.py` 会拦住这个写法。）
 """
 
 from __future__ import annotations

@@ -171,16 +171,31 @@ class TestStandardRows:
 
 
 class TestNoVirtualKeyIdWrites:
-    """静态兜底：api/v1 下不得再出现 api_key.id 的写/读引用。"""
+    """静态兜底：`app/` 下不得再出现 `api_key.id` / `auth.id` 引用。
 
-    def test_api_v1_has_no_api_key_id_references(self):
-        root = Path(__file__).resolve().parents[1] / "app" / "api" / "v1"
+    `AuthContext.id` 直接委托 `api_key.id`，超管下同样返回虚拟 ID
+    `00000000-...-0001`，写进带外键的列会 500。唯一允许出现这两者的文件是
+    `app/core/auth_context.py` —— 它负责产出 `id` 与 `owner_id`。
+    """
+
+    _FORBIDDEN = ("api_key.id", "auth.id")
+    _EXEMPT_FILES = {"app/core/auth_context.py"}
+
+    def test_app_has_no_virtual_key_id_references(self):
+        root = Path(__file__).resolve().parents[1]
         offenders: list[str] = []
-        for path in sorted(root.rglob("*.py")):
-            text = path.read_text(encoding="utf-8")
-            for no, line in enumerate(text.splitlines(), 1):
+        for path in sorted((root / "app").rglob("*.py")):
+            rel = path.relative_to(root).as_posix()
+            if rel in self._EXEMPT_FILES:
+                continue
+            for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 code = line.split("#", 1)[0]
-                if "api_key.id" in code:
-                    rel = path.relative_to(root.parents[1])
+                if any(token in code for token in self._FORBIDDEN):
                     offenders.append(f"{rel}:{no}: {line.strip()}")
-        assert offenders == [], "改用 api_key.owner_id（写）或 scope_clause（读）：\n" + "\n".join(offenders)
+        assert offenders == [], (
+            "写归属用 auth.owner_id（超管落 NULL），读过滤用 auth.scope_clause：\n"
+            + "\n".join(offenders)
+        )
+
+    def test_exemption_surface_is_single_file(self):
+        assert TestNoVirtualKeyIdWrites._EXEMPT_FILES == {"app/core/auth_context.py"}
