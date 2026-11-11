@@ -106,15 +106,8 @@ class TestFetchViolationGeometry:
         db = _FakeDB([(1, '{"type": "Point"}')])
         await _fetch_violation_geometry(db, "file-1", [1], api_key_id="key-9")
         assert len(db.executed) == 3
-        # 每个查询的 where 都带 api_key_id 条件
-        from sqlalchemy.sql import visitors
-
-        for q in db.executed:
-            seen_key = False
-            for col in q.whereclause.get_children():
-                pass
-            sql = str(q.select)
-            # 简化：直接编译检查
+        # 每个查询编译后都应带 api_key_id 条件（SQLAlchemy 2.1 移除 Select.select，
+        # 原先用 str(q.select) 的死代码在 2.1 下 AttributeError，已删；编译断言本就足够）
         compiled = [str(q.compile(compile_kwargs={"literal_binds": True})) for q in db.executed]
         for c in compiled:
             assert "api_key_id" in c
