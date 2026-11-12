@@ -45,11 +45,28 @@ target_metadata = Base.metadata
 
 # PostGIS/扩展自带的表不归本项目模型管理，autogenerate / alembic check 时排除，
 # 避免把 spatial_ref_sys 误判为 remove_table。仅影响差异比较，不影响运行时。
-_EXCLUDE_TABLES = {"spatial_ref_sys", "geography_columns", "geometry_columns"}
+_EXCLUDE_TABLES = {
+    "spatial_ref_sys",
+    "geography_columns",
+    "geometry_columns",
+    # v2.24 之前的遗留单表（已被 point/line/polygon_features 分区表取代，ORM 无映射，
+    # 生产库仍有历史数据；不在迁移链中，也不参与差异比较）。
+    "spatial_features",
+}
+
+# 运行时按需创建的分区子表（<parent>_p_<stored_file_id>，见 services/feature_store.py）。
+# 它们是父表的数据载体，跟随父表 DDL 自动生成，不能由 autogenerate 当独立表处理。
+_PARTITION_PREFIXES = (
+    "point_features_p_",
+    "line_features_p_",
+    "polygon_features_p_",
+)
 
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and name in _EXCLUDE_TABLES:
+    if type_ == "table" and (
+        name in _EXCLUDE_TABLES or name.startswith(_PARTITION_PREFIXES)
+    ):
         return False
     return True
 

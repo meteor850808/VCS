@@ -3,7 +3,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -29,7 +30,7 @@ class QualityRuleResult(Base):
     total_checked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     detail: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True, comment="{sample_values:[...], top_errors:[...]}"
+        JSONB, nullable=True, comment="{sample_values:[...], top_errors:[...]}"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

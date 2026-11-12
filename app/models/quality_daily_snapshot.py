@@ -8,7 +8,7 @@ v2.1 变更：
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -19,22 +19,35 @@ class QualityDailySnapshot(Base):
     __tablename__ = "quality_daily_snapshots"
     __table_args__ = (
         UniqueConstraint("api_key_id", "snapshot_date", name="uq_qds_api_date"),
+        # 趋势查询按日期范围扫表；历史库（迁移链之外建的 DDL）已有同名索引，此处显式声明以保持
+        # 模型与库一致（否则 autogenerate 会把它当成多余索引删掉）。
+        Index("idx_qds_date", "snapshot_date"),
     )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    # 不单独建 api_key_id 索引：唯一约束 (api_key_id, snapshot_date) 的前缀已覆盖该访问路径
     api_key_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False, index=True
+        String(36), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False
     )
     snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
     total_files: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     checked_files: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    completeness: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
-    uniqueness: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
-    consistency: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    # asdecimal=False：注解是 float，读回也应是 float（趋势计算直接参与浮点运算）
+    completeness: Mapped[float | None] = mapped_column(
+        Numeric(5, 4, asdecimal=False), nullable=True
+    )
+    uniqueness: Mapped[float | None] = mapped_column(
+        Numeric(5, 4, asdecimal=False), nullable=True
+    )
+    consistency: Mapped[float | None] = mapped_column(
+        Numeric(5, 4, asdecimal=False), nullable=True
+    )
     violations_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    score_overall: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    score_overall: Mapped[float | None] = mapped_column(
+        Numeric(5, 4, asdecimal=False), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

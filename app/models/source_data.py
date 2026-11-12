@@ -8,7 +8,8 @@ v2.1 变更：
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, LargeBinary
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, LargeBinary
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -81,7 +82,7 @@ class SourceField(Base):
     is_primary_key: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     allowed_values: Mapped[list | None] = mapped_column(
-        JSON, nullable=True, comment="兼容旧版：内嵌允许值列表（推荐用字典）"
+        JSONB, nullable=True, comment="兼容旧版：内嵌允许值列表（推荐用字典）"
     )
     ordering: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
@@ -154,15 +155,15 @@ class StandardVersion(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     standard_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("data_standards.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("data_standards.id", ondelete="SET NULL"), nullable=True, index=True
     )
     api_key_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True, index=True
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     version_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    snapshot_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    diff_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    snapshot_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    diff_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     change_log: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_rollback: Mapped[bool] = mapped_column(Boolean, default=False)
     file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

@@ -8,7 +8,8 @@ v2.2 变更：
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -39,7 +40,7 @@ class QualityRule(Base):
         String(16), nullable=False, default="warning"
     )
     params: Mapped[dict | None] = mapped_column(
-        JSON, nullable=True,
+        JSONB, nullable=True,
         comment="{allowed_values:[...], max_length:100, min:0, max:999, pattern:...}"
     )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

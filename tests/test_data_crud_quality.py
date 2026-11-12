@@ -610,9 +610,11 @@ class TestReindexAggFailure:
 # ══════════════════════════════════════════════════════════════════════════════
 
 _FAKE_QC_RESULT = {
-    "scores": {"completeness": 95.0, "accuracy": 90.0, "consistency": 85.0,
-               "uniqueness": 80.0, "topology": 70.0,
-               "overall": 85.75},  # =95×0.25+90×0.25+85×0.20+80×0.15+70×0.15
+    # 口径 0..1：与 quality_checker.run_quality_check 一致（综合分注释「0..1」、
+    # SCORING_PASS_THRESHOLD=0.85、展示层乘 100），也才能装进 numeric(5,4)。
+    "scores": {"completeness": 0.95, "accuracy": 0.90, "consistency": 0.85,
+               "uniqueness": 0.80, "topology": 0.70,
+               "overall": 0.8575},  # =0.95×0.25+0.90×0.25+0.85×0.20+0.80×0.15+0.70×0.15
     "attr_summary": {"total": 5, "passed": 4, "failed": 1, "by_rule": {}},
     "topo_summary": {"total": 2, "passed": 2, "failed": 0, "by_rule": {}},
     "attr_results": [{"rule_id": "r1", "passed": True}],
@@ -712,8 +714,8 @@ class TestQualityCheck:
             )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["score_completeness"] == 95.0
-        assert body["score_overall"] == 85.75  # v2.20: 后端按 WEIGHTS 计算返回
+        assert body["score_completeness"] == 0.95
+        assert body["score_overall"] == 0.8575  # v2.20: 后端按 WEIGHTS 计算返回
         assert body["total_features"] == 5
         assert body["checked_layers"] == ["L1"]
 
@@ -722,7 +724,7 @@ class TestQualityCheck:
             select(QualityReport).where(QualityReport.file_name == "qc.csv")
         )).scalars().first()
         assert report is not None
-        assert report.score_overall == 85.75  # v2.20: 综合分已持久化
+        assert report.score_overall == 0.8575  # v2.20: 综合分已持久化
         assert report.json_report_path
         assert Path(report.json_report_path).exists()
 
@@ -750,7 +752,7 @@ class TestQualityCheck:
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["data_standard_id"] == std.id
-        assert body["score_accuracy"] == 90.0
+        assert body["score_accuracy"] == 0.90
 
 
 # ══════════════════════════════════════════════════════════════════════════════
