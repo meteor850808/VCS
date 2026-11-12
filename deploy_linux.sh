@@ -24,7 +24,7 @@ err()  { echo -e "  ${RED}ERROR${NC} - $1"; }
 
 echo ""
 echo "========================================"
-  echo "  VCS v2.23.0 One-Click Deploy (Linux)"
+  echo "  VCS v2.25.1 One-Click Deploy (Linux)"
 echo "  Code : $APP_DIR/app"
 echo "  Port : $PORT"
 echo "========================================"
