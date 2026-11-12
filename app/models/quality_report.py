@@ -8,7 +8,7 @@ v2.1 变更：
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,13 +49,13 @@ class QualityReport(Base):
         String(36), ForeignKey("standard_tables.id", ondelete="SET NULL"), nullable=True
     )
     stored_file_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("stored_files.id", ondelete="SET NULL"), nullable=True,
+        String(36), ForeignKey("stored_files.id", ondelete="SET NULL"), nullable=True, index=True,
         comment="关联入库文件，用于导出违规要素几何"
     )
-    # ── 新增：分项结果 ──
-    attribute_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="{total,passed,failed,by_rule:{...}}")
-    topology_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="{total,passed,failed,by_rule:{...}}")
-    topology_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="拓扑检查配置快照")
+    # ── 新增：分项结果（统一 JSONB：与库一致，GIN 索引/JSON 运算符可用）──
+    attribute_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="{total,passed,failed,by_rule:{...}}")
+    topology_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="{total,passed,failed,by_rule:{...}}")
+    topology_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True, comment="拓扑检查配置快照")
     checked_layers: Mapped[list | None] = mapped_column(
         JSONB, nullable=True,
         comment="质检圈定的图层名列表（v2.10.5）；NULL=全部图层",
@@ -68,8 +68,11 @@ class QualityReport(Base):
     score_topology: Mapped[float | None] = mapped_column(Float, nullable=True)
     # v2.20: 五维加权综合分（唯一来源 quality_checker.WEIGHTS；列在库中早已存在，
     # 此前从未写入/映射。无默认值——存量行保持 NULL → 读取时按 WEIGHTS 即时重算）
+    # 类型与 quality_daily_snapshots 的各维度分一致：numeric(5,4)，四位小数足够。
+    # asdecimal=False：注解写的是 float，读回也必须是 float——否则 Decimal 与 float
+    # 混算（如 WEIGHTS 加权）会抛 TypeError。
     score_overall: Mapped[float | None] = mapped_column(
-        Float, nullable=True,
+        Numeric(5, 4, asdecimal=False), nullable=True,
         comment="v2.20 五维加权综合分（quality_checker.WEIGHTS）",
     )
     # ── v3 口径元数据 ──
