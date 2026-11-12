@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="矢量转换服务 (Vector Conversion Service)",
     description="支持 SHP / GeoJSON / KML / DXF 等格式互转，自动 CRS 坐标变换、几何修复与 ogr2ogr 脚本生成。",
-    version="2.24.0",
+    version="2.25.1",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

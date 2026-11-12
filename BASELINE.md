@@ -1,6 +1,7 @@
 # VCS 空间质检 — 项目基准线文档
 
 > **维护规则**: 每次功能变更后，同步更新本文档对应章节。  
+> **最后更新**: 2026-11-12 · **v2.25.1 归属列语义落地 + 迁移链对齐模型（补丁版，无新增功能）**：① 归属列写入统一 `AuthContext.owner_id`（超管归属落 NULL），`app/` 全目录静态守卫禁 `api_key.id` / `auth.id`（唯一豁免 `app/core/auth_context.py`，扫描先用 `tokenize` 屏蔽字符串）；6 个超管写端点运行时实测 201 且落库归属 NULL。② 迁移 `0015`–`0018` 把迁移链、生产库与 ORM 模型三方对齐——`0015` 放宽 `quality_rules.api_key_id`；`0016` 补 6 个缺列（`stored_files.layer_name`、`quality_reports.score_overall`、`standard_versions.{version_number,snapshot_data,diff_data,is_rollback}`）、三张要素表 `properties` 转 JSONB、`detected_crs` 放宽到 `VARCHAR(2048)`；`0017` 补 17 个外键、放宽 3 个归属列、孤立归属归一为 NULL；`0018` 62 列注释 + 8 列 `json→jsonb` + `score_overall` 收窄 `numeric(5,4)`（越界预检）+ 37 列收紧 NOT NULL（NULL 预检）+ 16 删/21 建索引 + `uq_qds_api_date` 约束改名 + 删 3 张要素父表的 `stored_file_id` 外键。③ 模型侧 `score_overall` 与 `quality_daily_snapshots` 四列改 `Numeric(5,4,asdecimal=False)`（注解是 float，读回必须 float）；`alembic/env.py` 排除 `spatial_ref_sys` / `spatial_features` 与分区子表。④ `alembic check` 在 `vcs_db` 与链库均 `0018 (head)` 且 `No new upgrade operations detected.`；空库全链 `0001→0018` 实跑通过（需先建 PostGIS）；生产库升级前后行数零差异。⑤ 全量回归 **1886 passed / 9 skipped**，覆盖率 **99.90%**。详见 `docs/revision_v2_25_1.md`。
 > **最后更新**: 2026-11-10 · **v2.25.0 五维评分口径 v3（要素级派生）**：① 维度分由「条目通过率」改为「要素级派生比率」`1 - Σfailed/Σtotal_checked`，条目通过率降为诊断字段 `rule_pass_rate`；归集关系收敛到 `quality_checker.DIMENSION_RULES`（completeness←31010004、accuracy←31010005、consistency←31010001/02/03、uniqueness←31010006、topology←T01–T05+T11–T13）。② `DIAGNOSTIC_RULES` = 31010007/08/09 + T06–T10：照常执行、进违规清单，但不进任何维度分。③ 未评价维度写 NULL 并从权重分母中剔除，全未评价则综合分 NULL、判定 `not_evaluated`；判定阈值收敛到 `config.scoring_pass_threshold`/`scoring_warn_threshold`（0.85/0.60），新增回滚开关 `scoring_profile`（`SCORING_PROFILE`，默认 `v3`）。④ 结构三项补分母（A1 分母=标准要求图层数，A2/A3 每图层 1 单位），T01 分母=参与检查要素总数，T11 分析量上限 5000 且超限标 `denominator_scope="truncated"`。⑤ 迁移 `0014_scoring_profile`：新增 `scoring_profile`/`score_evaluated`/`evaluation_errors` 三列，五个 `score_*` 列放宽为可空（NULL ≠ 0 分）；脱管库改用幂等直连脚本 `scripts/apply_0014.py`。⑥ 前端 `scoreView`/`dimCard` 统一渲染、HTML 报告与 Excel 导出统一读 `score_overall` + `verdict`，移除 85/60 阈值字面量。⑦ 历史报告不重算，v3 与 v2 分数不可比。⑧ 全量回归 **1833 passed / 4 skipped**（1 failed + 4 errors 均为既有环境缺口：`data_standard_template.xlsx` 未入库、LibreDWG 未安装）。详见 `docs/revision_v2_25_0.md`。
 > **最后更新**: 2026-10-19 · **仓库整洁化（文档归并 + 第三方二进制跟踪策略统一）**：① 精简 `CONTEXT.md`（去除与本文档重复内容）；新增 `docs/README.md`（docs 总索引）、`docs/docker/README.md`、`docs/deploy/README.md`（部署运维索引）。② `.gitignore` 规范化（新增 `*.log` 忽略运行日志；修复一次 UTF-16 混编损坏）。③ **第三方二进制跟踪策略统一**：将 `Redis8/` 运行时二进制（`*.exe`/`*.dll`，~37MB）**移出版本控制**并纳入 `.gitignore`，与既有 `tools/libredwg/`「第三方二进制运行时不入库」策略一致（依据 `docs/stage_report_2026-09-01.md` §3.2 option b）；仅保留 `Redis8/` 的 `*.conf`/`README*.md`/`start.bat` 与 `tools/README.md` 入库；二者二进制仍留本地，并由 `deploy/offline/`（`build_bundle.ps1` 自 `Redis8/`+`tools/libredwg/` 收集）与 Docker 镜像供给。
 > **最后更新**: 2026-10-19 · **v2.24.0 运维交付（Docker 操作手册 + 发布编排）**：新增《Docker 部署·使用·调试操作手册》（`docs/docker_ops_manual_v2_24_0.md`，覆盖架构/镜像获取三路径/配置/三种部署模式/日常运维/排障速查/数据备份恢复/升级回滚/安全/附录）+ 新增发布编排 `docker-compose.release.yml`（基于已发布镜像 `image:` 起服，内置 Nginx/TLS/secrets/端口收敛/migrate Job，`REGISTRY`/`NAMESPACE`/`TAG` 三变量切换仓库，支持离线 `save`/`load`）。
@@ -200,7 +201,7 @@
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | String(36) | PK | UUID |
-| name | String(128) | UNIQUE, INDEX | 分组名称 |
+| name | String(128) | UNIQUE（唯一索引 `ix_key_groups_name`） | 分组名称 |
 | description | Text | NULLABLE | 描述 |
 | created_at | DateTime(tz) | INDEX | 创建时间 |
 | updated_at | DateTime(tz) | | 更新时间 |
@@ -343,7 +344,7 @@
 | nullable | Boolean | DEFAULT True | 是否可空 |
 | is_primary_key | Boolean | DEFAULT False | 是否主键 |
 | is_required | Boolean | DEFAULT False | 是否必填 |
-| allowed_values | JSON | | 允许值 |
+| allowed_values | JSONB | | 允许值（v2.25.1 起 JSONB，兼容旧版内嵌值列表） |
 
 #### `source_dictionaries` — 源数据字典
 | 列名 | 类型 | 约束 | 说明 |
@@ -370,8 +371,8 @@
 | api_key_id | String(36) | FK→api_keys, INDEX | 所属密钥 |
 | version_number | Integer | DEFAULT 1 | 版本号 |
 | version_label | String(32) | | 版本标签 |
-| snapshot_data | JSON | | 快照数据 |
-| diff_data | JSON | | 差异数据 |
+| snapshot_data | JSONB | | 快照数据 |
+| diff_data | JSONB | | 差异数据 |
 | change_log | Text | | 变更日志 |
 | is_rollback | Boolean | DEFAULT False | 是否回滚 |
 | file_data | LargeBinary | | 文件数据 |
@@ -530,7 +531,7 @@
 | rule_name | String(256) | | 规则名称 |
 | field_pattern | String(256) | DEFAULT '' | 字段匹配模式 |
 | severity | String(16) | DEFAULT 'warning' | 严重程度 |
-| params | JSON | | 规则参数 |
+| params | JSONB | | 规则参数 |
 | enabled | Boolean | DEFAULT True | 是否启用 |
 | is_auto | Boolean | DEFAULT True | 是否自动生成 |
 
@@ -550,7 +551,7 @@
 | score_consistency | Float | NULLABLE (v2.25.0) | 一致性 |
 | score_uniqueness | Float | NULLABLE (v2.25.0) | 唯一性 |
 | score_topology | Float | NULLABLE (v2.25.0) | 拓扑 |
-| score_overall | Float | NULLABLE | 加权综合分（v2.20 起映射；未评价维不参与，全未评价则 NULL） |
+| score_overall | Numeric(5,4) | NULLABLE | 加权综合分（0–1 真口径；未评价维不参与，全未评价则 NULL） |
 | **口径元数据**（v2.25.0 新增） | | | |
 | scoring_profile | String(8) | NOT NULL, DEFAULT 'v2' | 写入时的评分口径：`v2` 条目通过率 / `v3` 要素级派生 |
 | score_evaluated | JSON | | `{维度: 是否已评价}` |
@@ -563,7 +564,7 @@
 | standard_table_id | String(36) | FK→standard_tables | 关联表 |
 | stored_file_id | String(36) | FK→stored_files | 关联文件 |
 | checked_layers | JSONB | NULLABLE (v2.10.5) | 质检圈定的图层名列表；NULL=全部图层 |
-| attribute_summary / topology_summary / topology_config | JSON | | 摘要 |
+| attribute_summary / topology_summary / topology_config | JSONB | | 摘要（v2.25.1 起 JSONB） |
 | html_report_path / json_report_path | String(1024) | | 报告路径 |
 | created_at / updated_at | DateTime(tz) | | 时间戳 |
 
@@ -578,7 +579,7 @@
 | passed | Boolean | | 是否通过 |
 | severity | String(16) | | 严重程度 |
 | total_checked / failed_count | Integer | | 检查/失败计数 |
-| detail | JSON | | 详细信息 |
+| detail | JSONB | | 详细信息（v2.25.1 起 JSONB） |
 
 #### `quality_violations` — 违规明细
 | 列名 | 类型 | 约束 | 说明 |
@@ -597,12 +598,13 @@
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | String(36) | PK | UUID |
-| api_key_id | String(36) | FK→api_keys, CASCADE, INDEX | 所属密钥 |
-| snapshot_date | Date | UNIQUE(api_key_id, snapshot_date) | 快照日期 |
-| total_files / checked_files | Integer | | 文件计数 |
-| completeness / uniqueness / consistency | Numeric(5,4) | | 维度得分 |
-| violations_total | Integer | DEFAULT 0 | 违规总数 |
-| score_overall | Numeric(5,4) | | 综合得分 |
+| api_key_id | String(36) | FK→api_keys, CASCADE, NOT NULL | 所属密钥（不单独建索引：唯一约束前缀已覆盖） |
+| snapshot_date | Date | NOT NULL, UNIQUE `uq_qds_api_date`(api_key_id, snapshot_date) | 快照日期（另有 `idx_qds_date` 支持按日期范围扫表） |
+| total_files / checked_files | Integer | NOT NULL, DEFAULT 0 | 文件计数 |
+| completeness / uniqueness / consistency | Numeric(5,4) | NULLABLE | 维度得分（0–1，`asdecimal=False`） |
+| violations_total | Integer | NOT NULL, DEFAULT 0 | 违规总数 |
+| score_overall | Numeric(5,4) | NULLABLE | 综合得分（0–1，`asdecimal=False`） |
+| created_at / updated_at | DateTime(tz) | NOT NULL / NULLABLE | 时间戳 |
 
 ### 3.7 实体关系图
 
@@ -1112,6 +1114,10 @@ docs/
         └── VCS_项目修订全纪录.md  VCS_优化实施记录.md
 ```
 
+> **v2.25.1 续**：主目录 revision 文档新增 `revision_v2_25_1.md`（归属列语义 + 迁移 `0015`–`0018` 对齐），ADR 目录新增 `ADR-0004-dual-line-repo-topology.md`、`ADR-0005-cross-layout-porting-flow.md`、`ADR-0006-ownership-columns-owner-id.md`。
+>
+> **v2.25.0 续**：主目录 revision 文档新增 `revision_v2_25_0.md`（五维评分口径 v3），工程材料新增 `docs/superpowers/specs/2026-11-10-quality-scoring-optimization-design.md` 与 `docs/superpowers/plans/2026-11-10-quality-scoring-optimization.md`。
+>
 > **v2.24.0 续**：主目录 revision 文档新增 `revision_v2_23_0.md`、`revision_v2_24_0.md`；并新增运维文档 `docker_ops_manual_v2_24_0.md`（Docker 部署·使用·调试操作手册）。
 >
 > **v2.22.3 续**：主目录 revision 文档新增 `revision_v2_22_3.md`，主目录 v2.19.0 起的修订记录现为 **16 个**；`archive/` 仍为 30 个文件（`archive/revision_v2_*` 的 12 个全部早于 v2.22.0，未变）。
@@ -1278,6 +1284,9 @@ tests/
     └── (fixtures/mdb/ 测试数据目录)
 ```
 
+> **v2.25.1 新增**：`tests/test_migration_0015.py`（规则归属列可空）、`test_migration_0016.py`（缺列/类型同步）、`test_migration_0017.py`（外键与归属列）、`test_migration_0018.py`（11 条静态守卫：注释/JSONB/NOT NULL 预检/索引/约束改名/要素表 FK/降级有损声明）、`test_super_admin_ownership_p8.py`（6 个超管写端点 + `app/` 静态扫描守卫）。
+> 迁移文件**不能被测试 import**（项目根 `alembic/` 会遮蔽已安装包），守卫测试用 `ast.literal_eval` 读取迁移文件里的常量。
+
 `tests/conftest.py`（2026-09-01 新增）承载共享 `_test_engine`/`_TestSession`/`override_get_db`/
 `test_db`/`client`/`api_key_header`：`test_db`（session 级，非 autouse）在 yield 前设置
 `app.dependency_overrides[get_db]` + `create_all`，yield 后 `drop_all` + 清除 override——
@@ -1312,7 +1321,7 @@ tests/
 
 ```bash
 # 需要先启动 PostgreSQL + Redis
-.venv\Scripts\python.exe -m pytest tests/ -v                      # 详细输出（全量 1537 passed, v2.20.0）
+.venv\Scripts\python.exe -m pytest tests/ -v                      # 详细输出（全量 1886 passed / 9 skipped, v2.25.1）
 .venv\Scripts\python.exe -m pytest tests/ -v --cov=app           # 覆盖率
 .venv\Scripts\python.exe -m pytest tests/ -v --cov=app --cov-report=xml  # XML 报告
 ```
@@ -1584,11 +1593,12 @@ DEBUG: "true"
 
 ### 当前版本
 
-- **app/main.py**: 2.24.0
-- **CONTEXT.md**: v2.24.0
-- **deploy_linux.sh**: v2.23.0（Linux 部署面未随 v2.24.0 变更）
+- **app/main.py**: 2.25.1
+- **CONTEXT.md**: v2.25.1
+- **deploy_linux.sh**: v2.25.1
 - **deploy_windows.bat**: 退役（无版本标题；薄封装转调 `deploy\deploy_offline.bat`，离线部署入口见 `deploy/deploy_offline.bat`）
-- **restart.bat**: v2.23.0（标题版本号）
+- **restart.bat**: v2.25.1（标题版本号）
+- **docs/revision_v2_25_1.md**: 本版修订记录（新建）
 
 ### 版本追踪位置
 
@@ -1618,6 +1628,18 @@ DEBUG: "true"
 > ① `CONTEXT.md` ② `BASELINE.md`（顶部/§2/§4.8/§6/§10/§15/§17）③ `deploy_linux.sh` ④ `deploy_windows.bat`
 > ⑤ `restart.bat` ⑥ `app/main.py` ⑦ `docs/revision_history.md` + 新建 `docs/revision_v2_22_2.md`
 > ⑨ 新增脚本 `scripts/smoke_imp_exp_ui.py` + 新增测试 `tests/test_frontend_imp_exp_ui.py`。
+>
+> **v2.25.1 发布执行记录（含历史偏差校正）**：实际触及 ① `CONTEXT.md`（第 4–6 行）② `BASELINE.md`
+> （顶部变更日志 / §3 `key_groups`、`source_fields`、`standard_versions`、`quality_rules`、
+> `quality_reports`、`quality_rule_results`、`quality_daily_snapshots` / §10 文档索引 / §13 测试 /
+> §15）③ `deploy_linux.sh`（第 27 行）⑤ `restart.bat`（第 2、20 行）⑥ `app/main.py`（第 67 行）
+> ⑦ `docs/revision_history.md` 头部 + 追加 v2.25.1 / v2.25.0 两段 + 新建 `docs/revision_v2_25_1.md`；
+> 另补 `docs/README.md` 索引（revision 与 ADR 列表）——该文件**只在 monorepo 布局跟踪**，
+> root 布局从未端口它，故 root 侧跳过（见已知偏差）。
+> 校正的历史偏差：v2.25.0 发版时只更新了 CONTEXT 顶部与 BASELINE 顶部，**§15「当前版本」仍写
+> `app/main.py 2.24.0` / `CONTEXT.md v2.24.0`**，`app/main.py` 与两个部署脚本仍停在 2.24.0 / v2.23.0，
+> `revision_history.md` 头部仍写 `v2.24.0` 且无 v2.25.0 段落。本版一并修正，此后 §15 与各版本
+> 位点以本表为准。
 
 > **v2.23.0 发布执行记录**：新增 `deploy/` Windows 离线一键部署子系统，**0 项数据库变更**。实际触及：
 > ① `CONTEXT.md` ② `BASELINE.md`（顶部/§2/§6/§15）③ `deploy_linux.sh`（未改，本版仅 Windows 部署面）④ `deploy_windows.bat`（**退役**为薄封装转调 `deploy\deploy_offline.bat`，移除版本标题）

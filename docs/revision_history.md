@@ -1,8 +1,40 @@
 # VCS 空间质检 — 版本修订记录汇总
 
 > **维护规则**: 每次发版追加新版本段落，不修改旧段落。  
-> **最后更新**: 2026-10-13  
-> **当前版本**: v2.24.0
+> **最后更新**: 2026-11-12  
+> **当前版本**: v2.25.1
+
+---
+
+## v2.25.1 批 · 归属列语义落地 + 迁移链对齐模型 (2026-11-12)
+
+**变更**: 补丁版，无新增业务功能；详见 `docs/revision_v2_25_1.md`。
+- **归属列语义（ADR-0006）**：写入一律用 `AuthContext.owner_id`（超管落 NULL，普通 Key 落真实 ID），读取用 `scope_clause()` / `owns()`；`app/api/v1` 下 34 处归属写入收敛；6 个超管写端点修复前 500、修复后 201 且归属为 NULL
+- **静态守卫**：`tests/test_super_admin_ownership_p8.py` 扫描 `app/` 全目录（约 126 文件），禁令牌 `{api_key.id, auth.id}`，唯一豁免 `app/core/auth_context.py`，先用 `tokenize` 屏蔽字符串再匹配，扫描面下限 100 文件
+- **迁移 0015**：`quality_rules.api_key_id` 放宽为可空（超管规则是真实状态）
+- **迁移 0016**：补 6 个缺失列（`stored_files.layer_name`、`quality_reports.score_overall`、`standard_versions.{version_number,snapshot_data,diff_data,is_rollback}`）；三张要素表 `properties` 转 JSONB；`stored_files.detected_crs` 放宽到 `VARCHAR(2048)`
+- **迁移 0017**：补 17 个外键（10 个 `api_key_id`、7 个父子引用）；放宽 3 个归属列；孤立归属归一为 NULL；按 `(conrelid, conkey) → (confrelid, confkey)` 判重，幂等
+- **迁移 0018**：62 列注释、8 列 `json→jsonb`、`score_overall` 收窄 `numeric(5,4)`（±9.9999 预检）、37 列收紧 NOT NULL（NULL 预检）、16 删 + 21 建索引、`key_groups.name` 收敛为唯一索引、`uq_qds_api_date` 约束改名、删 3 张要素父表 `stored_file_id` 外键；降级尽力而为且不可完全还原
+- **模型侧**：`score_overall` 与 `quality_daily_snapshots` 四列改 `Numeric(5,4,asdecimal=False)`（注解是 float，读回必须 float）；`stored_file_id` / `standard_versions.standard_id` 补 `index=True`；显式声明 `idx_qds_date`；`alembic/env.py` 排除 `spatial_ref_sys` / `spatial_features` 与分区子表
+- **`score_overall` 口径裁决**：0–1 是真口径，保留 `Numeric(5,4)`；错的是测试 mock（`tests/test_data_crud_quality.py` 由 0–100 改 0–1，`overall=0.8575`）
+- **验收**：全量 **1886 passed / 9 skipped**、覆盖率 **99.90%**；`alembic check` 在 `vcs_db` 与链库均 `0018 (head)` 且无新操作；空库全链 `0001→0018` 通过；生产库升级前后行数零差异，写路径冒烟 `SMOKE_OK`
+- **发布链**：monorepo `8e8862e` → 端口 `edac977` → PR #7 → rebase-merge `f9ea3f8`；9 个改动文件 blob 逐一比对 0 差异
+- **本批同时校正历史偏差**：`BASELINE.md` §15 与 `app/main.py` / `deploy_linux.sh` / `restart.bat` / `revision_history.md` 头部此前仍停在 2.24.0 / v2.23.0
+- **遗留**：`scripts/migrate_auth_patterns.py:81-82` 仍教写 `auth.id`（不在 `app/` 下，守卫覆盖不到）
+
+---
+
+## v2.25.0 批 · 五维评分口径 v3（要素级派生） (2026-11-10)
+
+**变更**: 评分口径改造，详见 `docs/revision_v2_25_0.md`。
+- **口径**：维度分由「条目通过率」改为要素级派生比率 `1 - Σfailed/Σtotal_checked`，归集关系收敛到 `quality_checker.DIMENSION_RULES`；条目通过率降为诊断字段 `rule_pass_rate`
+- **诊断分层**：`DIAGNOSTIC_RULES` = 31010007/08/09 + T06–T10，照常执行、进违规清单，不进任何维度分
+- **未评价语义**：未评价维度写 NULL 并从权重分母剔除，全未评价则综合分 NULL、判定 `not_evaluated`；阈值收敛到 `config.scoring_pass_threshold`/`scoring_warn_threshold`（0.85/0.60）
+- **分母补齐**：A1 分母=标准要求图层数，A2/A3 每图层 1 单位，T01 分母=参与检查要素总数，T11 上限 5000 且超限标 `denominator_scope="truncated"`
+- **迁移 0014**：新增 `scoring_profile`/`score_evaluated`/`evaluation_errors` 三列，五个 `score_*` 列放宽为可空；脱管库用幂等直连脚本 `scripts/apply_0014.py`
+- **展示与回滚**：前端 `scoreView`/`dimCard` 统一渲染，HTML 报告与 Excel 导出读 `score_overall` + `verdict`；回滚开关 `SCORING_PROFILE=v2`
+- **不可比声明**：历史报告不重算，v3 与 v2 分数不可并列比较
+- 全量回归 **1833 passed / 4 skipped**（1 failed + 4 errors 为既有环境缺口：`data_standard_template.xlsx` 未入库、LibreDWG 未安装）
 
 ---
 

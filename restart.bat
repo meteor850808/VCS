@@ -1,5 +1,5 @@
 @echo off
-title VCS v2.23.0 Restart
+title VCS v2.25.1 Restart
 color 0A
 
 set PORT=45679
@@ -17,7 +17,7 @@ set OLDPORT3=45680
 
 echo.
 echo ========================================
-echo   VCS v2.23.0 Server Restart
+echo   VCS v2.25.1 Server Restart
 echo   Code: %PROJECT_DIR%app
 echo   Venv: %VENV_DIR%
 echo ========================================
