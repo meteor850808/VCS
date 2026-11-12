@@ -1285,6 +1285,7 @@ tests/
 ```
 
 > **v2.25.1 新增**：`tests/test_migration_0015.py`（规则归属列可空）、`test_migration_0016.py`（缺列/类型同步）、`test_migration_0017.py`（外键与归属列）、`test_migration_0018.py`（11 条静态守卫：注释/JSONB/NOT NULL 预检/索引/约束改名/要素表 FK/降级有损声明）、`test_super_admin_ownership_p8.py`（6 个超管写端点 + `app/` 静态扫描守卫）。
+> **v2.25.1 后续收敛新增**：`tests/test_docs_index_links.py`（5 条 docs 索引守卫：索引文件存在性 / markdown 相对链接可解析 / 反引号内 `../` 路径可解析 / ADR 全覆盖 / 当前版本 revision 已索引）。
 > 迁移文件**不能被测试 import**（项目根 `alembic/` 会遮蔽已安装包），守卫测试用 `ast.literal_eval` 读取迁移文件里的常量。
 
 `tests/conftest.py`（2026-09-01 新增）承载共享 `_test_engine`/`_TestSession`/`override_get_db`/
@@ -1321,7 +1322,7 @@ tests/
 
 ```bash
 # 需要先启动 PostgreSQL + Redis
-.venv\Scripts\python.exe -m pytest tests/ -v                      # 详细输出（全量 1886 passed / 9 skipped, v2.25.1）
+.venv\Scripts\python.exe -m pytest tests/ -v                      # 详细输出（全量 1891 passed / 9 skipped, v2.25.1 + 后续收敛）
 .venv\Scripts\python.exe -m pytest tests/ -v --cov=app           # 覆盖率
 .venv\Scripts\python.exe -m pytest tests/ -v --cov=app --cov-report=xml  # XML 报告
 ```
@@ -1634,8 +1635,10 @@ DEBUG: "true"
 > `quality_reports`、`quality_rule_results`、`quality_daily_snapshots` / §10 文档索引 / §13 测试 /
 > §15）③ `deploy_linux.sh`（第 27 行）⑤ `restart.bat`（第 2、20 行）⑥ `app/main.py`（第 67 行）
 > ⑦ `docs/revision_history.md` 头部 + 追加 v2.25.1 / v2.25.0 两段 + 新建 `docs/revision_v2_25_1.md`；
-> 另补 `docs/README.md` 索引（revision 与 ADR 列表）——该文件**只在 monorepo 布局跟踪**，
-> root 布局从未端口它，故 root 侧跳过（见已知偏差）。
+> 另补 `docs/README.md` 索引（revision 与 ADR 列表）；该文件及其引用的
+> `docs/docker/README.md`、`docs/deploy/README.md` 当时只在 monorepo 布局跟踪，root 侧未端口，
+> 已由后续提交收敛（见 `docs/revision_v2_25_1.md` §10）——三个文件按原路径端口到 root，并修掉
+> 子索引里少一层 `../` 的既有路径 bug，另加守卫 `tests/test_docs_index_links.py`。
 > 校正的历史偏差：v2.25.0 发版时只更新了 CONTEXT 顶部与 BASELINE 顶部，**§15「当前版本」仍写
 > `app/main.py 2.24.0` / `CONTEXT.md v2.24.0`**，`app/main.py` 与两个部署脚本仍停在 2.24.0 / v2.23.0，
 > `revision_history.md` 头部仍写 `v2.24.0` 且无 v2.25.0 段落。本版一并修正，此后 §15 与各版本

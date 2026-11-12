@@ -203,21 +203,83 @@ NOT NULL 并提示先补归属——历史上的虚拟 ID 无法还原，迁移�
 | 合并方式 | **rebase-merge**，未 squash、未改写历史；`main = f9ea3f8`（父 `10bd0b6`，单提交保留） |
 | blob 校验 | 9 个改动文件逐一比对 `8e8862e:空间质检/<path>` 与 `f9ea3f8:<path>`，0 处不一致 |
 | 补端口提交 | `95aa192`（计划状态注记，docs-only）在本次一并 `am -p2` 进 root，消除两仓库该文件的偏差 |
-| 布局差异 | `docs/README.md` 的索引更新**未端口**：该文件在 root 布局未跟踪（见 §9） |
+| 布局差异 | `docs/README.md` 的索引更新本次**未随该 PR 端口**（该文件在 root 布局未跟踪），已由 §10 的后续提交收敛 |
 
 本文件所在的提交是**版本文档同步**提交，同样经 PR → rebase-merge 进入 `main`，不重写
 `f9ea3f8` 及更早的历史。
 
 ## 9. 已知遗留
 
-- `docs/README.md`（docs 总索引）**只在 monorepo 布局跟踪**：root 布局从未端口该文件，也
-  从未端口它引用的 `docs/docker/README.md`、`docs/deploy/README.md`（`ls-tree` 可核）。
-  本次端口因此跳过 `docs/README.md` 的索引更新，**root 仓库的 docs 索引仍缺
-  `revision_v2_25_0` / `revision_v2_25_1` 与 ADR-0004–0006 三条**。要收敛需单独端口这三个
-  文件，并改其中的相对链接——root 布局下 `docker/`、`deploy/` 在仓库根，不在 `docs/` 下。
-- `scripts/migrate_auth_patterns.py:81-82` 仍教用户写 `auth.id`；该脚本不在 `app/` 下，
-  静态守卫覆盖不到。**未修**。
 - 静态守卫的匹配精度问题（子串匹配误判 `oauth.id`、变量中转绕过、大小写/空格变体）见 §2。
 - ADR-0006「负面/权衡」已记录：`quality_rules` 出现 NULL 归属行后，按 `api_key_id` 分组的
   统计需要显式处理 NULL 桶；含 `api_key_id` 的唯一约束在 PG 中 NULL 互不相等，超管可以
   创建同名标准。
+
+## 10. 遗留收敛（v2.25.1 后续提交）
+
+本版发布时记录的两条遗留已在本节所述的后续提交中处理，**版本号不变**（纯文档与注释，
+无功能变更，不重走 6 个版本位点）。
+
+### 10.1 docs 索引三文件端口到 root
+
+`docs/README.md`、`docs/docker/README.md`、`docs/deploy/README.md` 由 `808ee40`（2026-10-19）
+引入，root 的 `origin/main` 从未跟踪过它们。本次把三个文件按**原路径**端口到 root 的
+`docs/` 下，两仓库结构自此一致。
+
+同时修掉两个文件的**既有路径 bug**：这两份子索引原本是按「住在 `docker/`、`deploy/` 目录里」
+写的，被放进 `docs/` 下后没有改链接层级。
+
+| 文件 | 原写法（错） | 现写法 |
+|---|---|---|
+| `docs/docker/README.md` | `` `../Dockerfile` ``、`` `../docker-compose*.yml` ``、`` `../.env.prod.example` `` | `` `../../Dockerfile` `` 等（指向仓库根） |
+| `docs/deploy/README.md` | `` `../deploy_windows.bat` ``、`` `../deploy_linux.sh` ``、`` `../restart.bat` ``、`` `../restart.sh` `` | `` `../../...` `` |
+| `docs/deploy/README.md` | 自指 `README.md`（实解析到 `docs/deploy/README.md`） | `../../deploy/README.md` |
+
+`docker/`、`deploy/` 两个目录内的文件表改用「路径**相对仓库根的 `docker/` / `deploy/` 目录**」
+的表头说明，避免在表格里写一串 `../../`。
+
+**关键点**：修好后的相对路径在 monorepo（`空间质检/docs/...`）与 root（`docs/...`）两种布局下
+**完全相同**——相对链接只取决于文件之间的关系，与仓库根位置无关。所以同一份文件可以原样
+用在两个布局，不需要端口时改写。
+
+`docs/deploy/README.md` 顶部另加一行指向 [`../../deploy/README.md`](../../deploy/README.md)：
+root 已有的 24 KB 运维手册（交付/安装/排障/凭证）与这份 3.7 KB 文件索引定位不同，两者并存
+且互相指引。
+
+### 10.2 新增索引守卫 `tests/test_docs_index_links.py`
+
+| 用例 | 断言 |
+|---|---|
+| `test_index_files_exist` | 三个索引文件都存在 |
+| `test_docs_index_links_resolve` | 所有 markdown 相对链接目标存在（跳过 `http(s)://`、`mailto:`、`#锚点`） |
+| `test_docs_index_backticked_paths_resolve` | 反引号里的 `../` / `../../` 路径目标存在——**本次真正的 bug 就属于这一类，链接型守卫抓不到** |
+| `test_docs_index_covers_all_adrs` | `docs/adr/ADR-*.md` 每个文件都在 `docs/README.md` 里出现 |
+| `test_docs_index_lists_current_version_revision` | 当前版本（从 `app/main.py` 读）的发版说明被索引 |
+
+反向验证：把 `docs/deploy/README.md` 的 `` `../../restart.sh` `` 临时改回 `` `../restart.sh` ``，
+测试立即报 `docs\deploy\README.md -> ../restart.sh`，确认守卫不是空转。
+
+### 10.3 `scripts/migrate_auth_patterns.py` 的完成声明
+
+该脚本是 v2.25.0 的一次性批量改造工具，使命已完成——现在跑 `--dry-run` 输出
+`Total: 0 files, 0 changes`。本次三处修正：
+
+1. 文件头加 **「已执行完毕，仅作历史参考，勿再运行」**，并写明它只处理**读路径**、不处理写路径。
+2. 删掉 `APP_DIRS` 里早已不存在的 `PROJECT_DIR/空间API服务/app`（死路径）。
+3. 把 Pattern 3 的注释（原文：「CREATE 操作保留 `api_key.id`，因为 `auth.id` 委托到它」）
+   改为明确的反面指引：写路径必须用 `auth.owner_id`，禁止 `api_key.id` / `auth.id`，
+   否则超管虚拟 ID 会触发外键失败（HTTP 500），并指向 ADR-0006 与静态守卫
+   `tests/test_super_admin_ownership_p8.py`。
+
+原文那句注释是本版修掉的坑的**反向知识**——照它做会重新引入 500，因此不只是措辞问题。
+
+### 10.4 验收
+
+| 项 | 结果 |
+|---|---|
+| 全量测试（monorepo 布局） | **1891 passed / 9 skipped**，覆盖率 **99.90%**，EXIT=0 |
+| 全量测试（root 布局） | **1891 passed / 9 skipped**（端口后复跑） |
+| 新增守卫反向验证 | 把 `` `../../restart.sh` `` 改回 `` `../restart.sh` `` → 测试报 `docs\deploy\README.md -> ../restart.sh`；恢复后绿 |
+| `scripts/migrate_auth_patterns.py` | `py_compile` 通过；`--dry-run` 输出 `Total: 0 files, 0 changes` |
+| 版本位点 | **不变**（仍 `2.25.1` / `v2.25.1`）：本轮是纯文档与注释，无功能变更，不重走 6 位点 |
+
