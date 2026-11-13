@@ -101,3 +101,81 @@ def test_docs_index_lists_current_version_revision():
     note = f"revision_v{version.replace('.', '_')}.md"
     text = (DOCS / "README.md").read_text(encoding="utf-8")
     assert note in text, f"docs/README.md 未索引当前版本发版说明 {note}"
+
+
+# docs/ 顶层允许不出现在索引里的文件（目前没有，保留扩展点）
+_INDEX_EXEMPT = set()
+
+
+def test_docs_index_lists_every_top_level_file():
+    """`docs/` 顶层的每个 .md / .html 都必须被 docs/README.md 索引。
+
+    2026-11-13 整理时发现的旧状态：`qc_redesign_v5.html`、`review_v2.16.0.md` 之外的
+    新文件长期不进索引；索引靠人工维护必然漂移，故把「顶层文件 ⊆ 索引」变成红灯。
+    """
+    text = (DOCS / "README.md").read_text(encoding="utf-8")
+    missing = sorted(
+        p.name
+        for p in DOCS.iterdir()
+        if p.is_file()
+        and p.suffix in {".md", ".html"}
+        and p.name != "README.md"
+        and p.name not in _INDEX_EXEMPT
+        and p.name not in text
+    )
+    assert not missing, f"docs/README.md 未索引这些顶层文件: {missing}"
+
+
+def _baseline_docs_section() -> str:
+    """截取 BASELINE.md §10「docs/ 设计文档体系」到下一个二级标题之间的文本。"""
+    baseline = (ROOT / "BASELINE.md").read_text(encoding="utf-8")
+    start = baseline.find("## 10. docs/")
+    assert start != -1, "BASELINE.md 未找到 §10 docs 章节"
+    end = baseline.find("\n## ", start + 1)
+    assert end != -1, "BASELINE.md §10 之后没有下一个二级标题"
+    return baseline[start:end]
+
+
+_TREE_PREFIX = "│├└─ \t"
+
+
+def _docs_tree_entries(section: str) -> set[str]:
+    """从 §10 的目录树代码块里取出条目名（去掉树形符号与行尾注释）。
+
+    只认代码块内的行：叙述段落里顺手提到 `adr/`、`archive/` 也算数的话，
+    守卫会变成永远为真的同义反复（本测试首版就是这样空转的）。
+    """
+    blocks = re.findall(r"```[a-zA-Z]*\n(.*?)```", section, re.S)
+    assert blocks, "BASELINE.md §10 未找到目录树代码块"
+    entries: set[str] = set()
+    for block in blocks:
+        for line in block.splitlines():
+            name = line.lstrip(_TREE_PREFIX).split("#")[0].strip()
+            if name:
+                entries.add(name)
+    return entries
+
+
+def test_baseline_docs_section_tracks_current_structure():
+    """BASELINE §10 必须覆盖 docs/ 的当前结构（含当前版本的 revision）。
+
+    2026-11-13 整理时发现的旧状态：§10 的目录树停在 v2.22.3，此后 4 个 revision 与
+    `adr/`、`docker/`、`deploy/`、`superpowers/`、`README.md` 全都不在树里，标注却是
+    「2026-09-29 复核」。版本相关项从 app/main.py 派生，避免每次发版改测试。
+    """
+    section = _baseline_docs_section()
+    entries = _docs_tree_entries(section)
+    main_py = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+    version = re.search(r'version="(\d+\.\d+\.\d+)"', main_py).group(1)
+    required = {
+        "docs 总索引": "README.md",
+        "ADR 目录": "adr/",
+        "Docker 索引": "docker/README.md",
+        "部署索引": "deploy/README.md",
+        "工程材料": "superpowers/",
+        "历史归档": "archive/",
+        "当前版本 revision": f"revision_v{version.replace('.', '_')}.md",
+    }
+    missing = [label for label, needle in required.items() if needle not in entries]
+    assert not missing, f"BASELINE §10 目录树未覆盖: {missing}；实际条目 {sorted(entries)}"
+

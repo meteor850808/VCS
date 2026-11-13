@@ -1,6 +1,7 @@
 # VCS 空间质检 — 项目基准线文档
 
 > **维护规则**: 每次功能变更后，同步更新本文档对应章节。  
+> **最后更新**: 2026-11-13 · **文档体系整理 + 静态守卫精度（无功能变更）**：① `BASELINE` §2 目录树、§10 docs 体系（重写为 2026-11-13 复核版）、§15 发版清单（`deploy_windows.bat` 标退役）与顶部历史累计串的陈旧项收敛；② `docs/README.md` 补齐索引、`docs/revision_history.md` 追加收敛条目、`CLAUDE.md` §2/§3/§4 同步；③ 静态守卫 `TestNoVirtualKeyIdWrites` 由子串匹配改为 AST 扫描，`oauth.id` 误报与 `auth .id` / `Auth.id` / 跨行属性链 / `getattr(auth,"id")` 漏拦全部归零；④ 新增 2 条 docs 结构守卫。**版本号仍 v2.25.1**。详见 `docs/revision_v2_25_1.md` §11。
 > **最后更新**: 2026-11-12 · **v2.25.1 归属列语义落地 + 迁移链对齐模型（补丁版，无新增功能）**：① 归属列写入统一 `AuthContext.owner_id`（超管归属落 NULL），`app/` 全目录静态守卫禁 `api_key.id` / `auth.id`（唯一豁免 `app/core/auth_context.py`，扫描先用 `tokenize` 屏蔽字符串）；6 个超管写端点运行时实测 201 且落库归属 NULL。② 迁移 `0015`–`0018` 把迁移链、生产库与 ORM 模型三方对齐——`0015` 放宽 `quality_rules.api_key_id`；`0016` 补 6 个缺列（`stored_files.layer_name`、`quality_reports.score_overall`、`standard_versions.{version_number,snapshot_data,diff_data,is_rollback}`）、三张要素表 `properties` 转 JSONB、`detected_crs` 放宽到 `VARCHAR(2048)`；`0017` 补 17 个外键、放宽 3 个归属列、孤立归属归一为 NULL；`0018` 62 列注释 + 8 列 `json→jsonb` + `score_overall` 收窄 `numeric(5,4)`（越界预检）+ 37 列收紧 NOT NULL（NULL 预检）+ 16 删/21 建索引 + `uq_qds_api_date` 约束改名 + 删 3 张要素父表的 `stored_file_id` 外键。③ 模型侧 `score_overall` 与 `quality_daily_snapshots` 四列改 `Numeric(5,4,asdecimal=False)`（注解是 float，读回必须 float）；`alembic/env.py` 排除 `spatial_ref_sys` / `spatial_features` 与分区子表。④ `alembic check` 在 `vcs_db` 与链库均 `0018 (head)` 且 `No new upgrade operations detected.`；空库全链 `0001→0018` 实跑通过（需先建 PostGIS）；生产库升级前后行数零差异。⑤ 全量回归 **1886 passed / 9 skipped**，覆盖率 **99.90%**。详见 `docs/revision_v2_25_1.md`。
 > **最后更新**: 2026-11-10 · **v2.25.0 五维评分口径 v3（要素级派生）**：① 维度分由「条目通过率」改为「要素级派生比率」`1 - Σfailed/Σtotal_checked`，条目通过率降为诊断字段 `rule_pass_rate`；归集关系收敛到 `quality_checker.DIMENSION_RULES`（completeness←31010004、accuracy←31010005、consistency←31010001/02/03、uniqueness←31010006、topology←T01–T05+T11–T13）。② `DIAGNOSTIC_RULES` = 31010007/08/09 + T06–T10：照常执行、进违规清单，但不进任何维度分。③ 未评价维度写 NULL 并从权重分母中剔除，全未评价则综合分 NULL、判定 `not_evaluated`；判定阈值收敛到 `config.scoring_pass_threshold`/`scoring_warn_threshold`（0.85/0.60），新增回滚开关 `scoring_profile`（`SCORING_PROFILE`，默认 `v3`）。④ 结构三项补分母（A1 分母=标准要求图层数，A2/A3 每图层 1 单位），T01 分母=参与检查要素总数，T11 分析量上限 5000 且超限标 `denominator_scope="truncated"`。⑤ 迁移 `0014_scoring_profile`：新增 `scoring_profile`/`score_evaluated`/`evaluation_errors` 三列，五个 `score_*` 列放宽为可空（NULL ≠ 0 分）；脱管库改用幂等直连脚本 `scripts/apply_0014.py`。⑥ 前端 `scoreView`/`dimCard` 统一渲染、HTML 报告与 Excel 导出统一读 `score_overall` + `verdict`，移除 85/60 阈值字面量。⑦ 历史报告不重算，v3 与 v2 分数不可比。⑧ 全量回归 **1833 passed / 4 skipped**（1 failed + 4 errors 均为既有环境缺口：`data_standard_template.xlsx` 未入库、LibreDWG 未安装）。详见 `docs/revision_v2_25_0.md`。
 > **最后更新**: 2026-10-19 · **仓库整洁化（文档归并 + 第三方二进制跟踪策略统一）**：① 精简 `CONTEXT.md`（去除与本文档重复内容）；新增 `docs/README.md`（docs 总索引）、`docs/docker/README.md`、`docs/deploy/README.md`（部署运维索引）。② `.gitignore` 规范化（新增 `*.log` 忽略运行日志；修复一次 UTF-16 混编损坏）。③ **第三方二进制跟踪策略统一**：将 `Redis8/` 运行时二进制（`*.exe`/`*.dll`，~37MB）**移出版本控制**并纳入 `.gitignore`，与既有 `tools/libredwg/`「第三方二进制运行时不入库」策略一致（依据 `docs/stage_report_2026-09-01.md` §3.2 option b）；仅保留 `Redis8/` 的 `*.conf`/`README*.md`/`start.bat` 与 `tools/README.md` 入库；二者二进制仍留本地，并由 `deploy/offline/`（`build_bundle.ps1` 自 `Redis8/`+`tools/libredwg/` 收集）与 Docker 镜像供给。
@@ -18,7 +19,7 @@
 > ④ C1 评分权重收敛：`quality_checker.WEIGHTS` 定为唯一权威；`score_overall` 列（库中早已存在但从未写入/映射）补 ORM 映射并落库；`GET /quality/{id}`、`GET /quality/{id}/html`、三条 `QualityReportDetail` 构造路径统一经 `quality._overall_from_scores(WEIGHTS)`；前端 app.js 删除 3 处硬编码权重改用后端 `score_overall`；权重归一化 + 前端无硬编码守卫 + GET 0.815 契约测试。
 > ⑤ C4 评估：data.py 4 个内联助手（`_guess_mime`/`_is_vector_file`/`_extract_layer_name`/`_ingest_srid`）均**无跨模块调用方**，抽取到 file_utils 属无价值重构，放弃（ADR-0001 路由拆分仍需 test-first 专项）；删除生产死代码 `_extract_layer_name`（连同其 3 个测试与留档引用）。
 > 全量 **1537 passed**（v2.19.6 的 1536 基准 +4 新契约测试 −3 死代码测试）。
-> **当前版本**: v2.24.0 · Docker 生产加固（Nginx 反代/自签 TLS + Docker secrets + LibreDWG/mdbtools Linux 适配 + Makefile）+ CI 双架构镜像构建发布（详见 `docs/revision_v2_24_0.md`）+ v2.23.0 Windows 离线一键部署子系统（deploy/，详见 `docs/revision_v2_23_0.md`）+ v2.22.3 CSV 导出补齐 + 字段-字典绑定模板往返（详见 `docs/revision_v2_22_3.md`）+ v2.22.2 数据标准导入/导出/模板单框三段重构 + mode 暴露 + 字典绑定链路缺陷定位（详见 `docs/revision_v2_22_2.md`）+ v2.22.1 架构优化（孤儿模块清除 + pytest 基建现代化，详见 `docs/revision_v2_22_1.md`）+ v2.22.0 Lane② data.py 收口批次（p5k2 纯函数迁移 + except-swallow 治理，详见 `docs/revision_v2_22_0.md`）+ v2.21.0 报告→预览定位联动（方案A）· 数据导出 v2.19.0 + 混合几何分组 v2.19.1 + 依赖补全 v2.19.2 + 真实数据导出根因修复 v2.19.3 + MDB Jet4 格式修复 v2.19.4 + File Geodatabase 导出 v2.19.5 + 压缩包自动清理修复 v2.19.6 + 架构收敛批次（C7 切片漂移/C2 死配置弃用/C3 日志轮转/C1 权重收敛）v2.20.0
+> **历史累计串（截至 v2.24.0，已停用；当前版本见 §15「当前版本」与顶部首行）**: Docker 生产加固（Nginx 反代/自签 TLS + Docker secrets + LibreDWG/mdbtools Linux 适配 + Makefile）+ CI 双架构镜像构建发布（详见 `docs/revision_v2_24_0.md`）+ v2.23.0 Windows 离线一键部署子系统（deploy/，详见 `docs/revision_v2_23_0.md`）+ v2.22.3 CSV 导出补齐 + 字段-字典绑定模板往返（详见 `docs/revision_v2_22_3.md`）+ v2.22.2 数据标准导入/导出/模板单框三段重构 + mode 暴露 + 字典绑定链路缺陷定位（详见 `docs/revision_v2_22_2.md`）+ v2.22.1 架构优化（孤儿模块清除 + pytest 基建现代化，详见 `docs/revision_v2_22_1.md`）+ v2.22.0 Lane② data.py 收口批次（p5k2 纯函数迁移 + except-swallow 治理，详见 `docs/revision_v2_22_0.md`）+ v2.21.0 报告→预览定位联动（方案A）· 数据导出 v2.19.0 + 混合几何分组 v2.19.1 + 依赖补全 v2.19.2 + 真实数据导出根因修复 v2.19.3 + MDB Jet4 格式修复 v2.19.4 + File Geodatabase 导出 v2.19.5 + 压缩包自动清理修复 v2.19.6 + 架构收敛批次（C7 切片漂移/C2 死配置弃用/C3 日志轮转/C1 权重收敛）v2.20.0
 
 ---
 
@@ -167,7 +168,7 @@
 │   ├── build_bundle.ps1     # 联网机离线资源包生成器（写 manifest.json）
 │   ├── deploy_offline.bat   # 离线部署入口（UAC 自提升, --from/--dry-run）
 │   └── README.md            # 部署/交付/排障说明（中文）
-├── docs/                    # 设计文档（revision_history + adr/ADR-0001 + review_v2.16.0 + archive/）
+├── docs/                    # 设计文档（README 索引 + revision_* + adr/ADR-0001~0006 + docker/ + deploy/ + superpowers/ + archive/）
 ├── data/                    # 运行时数据 (uploads/outputs/quality_reports/previews)
 ├── docker/                  # 容器构建资产 (v2.24.0)
 │   ├── entrypoint.sh        # 通用入口：派生 DATABASE_URL + 装载 secrets + 建数据目录
@@ -1083,29 +1084,40 @@ SANDBOX_LIMIT=1000
 > `docs/` 采用**精简主目录 + archive 归档**结构。  
 > 历史详细文档已归档至 `docs/archive/`，主目录仅保留汇总和最终交付物。
 
-### 主目录结构（2026-09-01 清理后 · 2026-09-29 复核）
+### 主目录结构（2026-09-01 清理后 · **2026-11-13 复核**）
 
 ```
 docs/
+├── README.md                # docs 总索引（revision / ADR / 部署运维 / 工程材料；两种布局均跟踪）
 ├── revision_history.md      # 版本修订记录汇总（最新追加在最前）
 ├── revision_v2_19_[0-6].md  # v2.19.x 修订记录（7 个）
-├── revision_v2_20_0.md      # v2.20.0 修订记录
-├── revision_v2_21_0.md      # v2.21.0 修订记录
-├── revision_v2_22_0.md      # v2.22.0 修订记录
-├── revision_v2_22_1.md      # v2.22.1 修订记录
-├── revision_v2_22_3.md      # v2.22.3 修订记录（CSV 导出补齐 + 字段-字典绑定模板往返）
-├── revision_v2_22_2.md      # v2.22.2 修订记录（导入/导出/模板单框三段重构 + 字典绑定链路留档）
+├── revision_v2_20_0.md      # v2.20.0 架构收敛批次（C7/C2/C3/C1/C4 评估）
+├── revision_v2_21_0.md      # v2.21.0 报告→预览定位联动
+├── revision_v2_22_0.md      # v2.22.0 data.py 收口批次（纯函数迁移 + except-swallow 治理）
+├── revision_v2_22_1.md      # v2.22.1 架构优化（孤儿模块清除 + pytest 基建现代化）
+├── revision_v2_22_2.md      # v2.22.2 导入/导出/模板单框三段重构 + mode 暴露
+├── revision_v2_22_3.md      # v2.22.3 CSV 无损归档往返 + 字段-字典绑定模板往返
+├── revision_v2_23_0.md      # v2.23.0 Windows 离线一键部署子系统（deploy/）
+├── revision_v2_24_0.md      # v2.24.0 Docker 生产加固 + CI 双架构镜像构建发布
+├── revision_v2_25_0.md      # v2.25.0 五维评分口径 v3（要素级派生）
+├── revision_v2_25_1.md      # v2.25.1 归属列 `owner_id` 语义 + 迁移 0015–0018（当前版本）
 ├── review_v2.16.0.md        # v2.16.0 审查报告
 ├── qc_redesign_v5.html      # 最终质检页设计原型（v2.6 实现依据）
 ├── stage_report_2026-09-01.md # 项目审查报告 + 清理日志 + 优化建议（2026-09-01）
 ├── docker_ops_manual_v2_24_0.md # Docker 部署·使用·调试操作手册（v2.24.0）
-└── archive/                  # 历史归档（30 个文件）
-    ├── revision_v2_*.md      # 各版本详细修订记录（12 个，均为 v2.22.0 之前）
+├── adr/                     # 架构决策记录 ADR-0001 ~ ADR-0006（6 个）
+├── docker/README.md         # Docker 资产索引（Dockerfile / compose / entrypoint / Nginx / 脚本）
+├── deploy/README.md         # 部署文件索引（离线子系统 12 阶段 / Linux 脚本 / 一键重启）
+├── superpowers/             # 工程执行材料（plans 5 + specs 4）
+│   ├── plans/               # 2026-08-27 mdb · 09-11 cad · 10-09 offline · 10-13 docker · 11-10 scoring
+│   └── specs/               # 09-11 cad · 10-09 offline · 10-13 docker · 11-10 scoring
+└── archive/                  # 历史归档（顶层 30 个文件 + legacy_root/ 8 个 = 38）
+    ├── revision_v2_*.md      # 各版本详细修订记录（12 个，均早于 v2.19.0）
     ├── technical_spec_*.md   # 技术方案（4 个）
     ├── test_manual_*.md      # 测试手册（8 个）
     ├── plan_v2_8.md          # 版本规划
-    ├── proposal_*.md         # 功能提案
-    ├── *-refactor-plan.md    # 重构方案（2 个）
+    ├── proposal_*.md         # 功能提案（1 个：字段字典层级）
+    ├── *-refactor-plan.md    # 重构方案（2 个：quality-check / upload）
     ├── data-ingestion.md     # 数据入库方案
     ├── environment-notes.md  # 环境说明
     └── legacy_root/          # 2026-09-01 由根目录归档的旧版文档（8 个）
@@ -1114,6 +1126,8 @@ docs/
         └── VCS_项目修订全纪录.md  VCS_优化实施记录.md
 ```
 
+> **2026-11-13 复核（本次整理）**：主目录 revision 文档实为 **17 个**（`v2.19.x` 7 + `v2.20.0`/`v2.21.0`/`v2.22.0`/`v2.22.1`/`v2.22.2`/`v2.22.3`/`v2.23.0`/`v2.24.0`/`v2.25.0`/`v2.25.1` 共 10）。此前两条注记的计数与磁盘不符：v2.22.3 注记称「16 个」、v2.22.2 注记称「15 个」，按 `ls` 复核当时应为 **13 个**；本次一并更正，并补齐此前漏列的 `README.md`、`adr/`（6 个）、`docker/`、`deploy/`、`superpowers/`。`archive/` 顶层 30 个文件 + `legacy_root/` 8 个 = **38**，其中 `proposal_*.md` 实为 **1 个**（原记 2 个）。计数由 `tests/test_docs_index_links.py` 的结构守卫兜底，不再依赖人工核对。
+>
 > **v2.25.1 续**：主目录 revision 文档新增 `revision_v2_25_1.md`（归属列语义 + 迁移 `0015`–`0018` 对齐），ADR 目录新增 `ADR-0004-dual-line-repo-topology.md`、`ADR-0005-cross-layout-porting-flow.md`、`ADR-0006-ownership-columns-owner-id.md`。
 >
 > **v2.25.0 续**：主目录 revision 文档新增 `revision_v2_25_0.md`（五维评分口径 v3），工程材料新增 `docs/superpowers/specs/2026-11-10-quality-scoring-optimization-design.md` 与 `docs/superpowers/plans/2026-11-10-quality-scoring-optimization.md`。
@@ -1123,7 +1137,7 @@ docs/
 > **v2.22.3 续**：主目录 revision 文档新增 `revision_v2_22_3.md`，主目录 v2.19.0 起的修订记录现为 **16 个**；`archive/` 仍为 30 个文件（`archive/revision_v2_*` 的 12 个全部早于 v2.22.0，未变）。
 >
 > **v2.22.2 复核修正**：原清单称 revision 文档「均归档至 `archive/`（12 个）」且版本停在 v2.15.0，与实际不符 ——
-> v2.19.0 起的修订记录（15 个）均留在**主目录**，`archive/revision_v2_*` 的 12 个全部早于 v2.22.0。归档数为 30（原写 38）。
+> v2.19.0 起的修订记录（15 个）均留在**主目录**，`archive/revision_v2_*` 的 12 个全部早于 v2.22.0。归档数为 30（原写 38）——30 是 `archive/` **顶层**文件数，含 `legacy_root/` 8 个则为 38（见 2026-11-13 复核注记）。
 
 ### 文档规则
 
@@ -1618,7 +1632,7 @@ DEBUG: "true"
 1. [ ] `CONTEXT.md` — 版本号
 2. [ ] `BASELINE.md` — 顶部版本号 + 最后更新日期
 3. [ ] `deploy_linux.sh` — 标题版本号
-4. [ ] `deploy_windows.bat` — 标题版本号
+4. [x] ~~`deploy_windows.bat` — 标题版本号~~ **不适用**：v2.23.0 起已退役为薄封装（`call deploy\deploy_offline.bat`），无版本标题，**不是版本位点**
 5. [ ] `restart.bat` — 标题版本号
 6. [ ] `app/main.py` — FastAPI version 字段
 7. [ ] `docs/revision_history.md` — 追加当前版本修订条目

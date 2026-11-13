@@ -63,6 +63,10 @@ Key 的代码路径。该 ID 在 `api_keys` 表里没有对应行，写进任何
 `x = auth.id` 再 `api_key_id=x` 的变量中转仍可绕过；`Auth.id` 大小写变体、`auth .id`
 空格变体、跨行属性链、`getattr(auth, "id")` 目前都不拦。
 
+> **2026-11-13 注**：上一段描述的是本版发布时的实现，已被 §11 的 AST 改造**取代**——
+> 误报与四类漏拦均已归零；`Auth.id` 经实测判定为**不该拦**（见 §11.2）。此处保留原文
+> 作为发布时状态的记录，不回改。
+
 ## 3. 迁移链追平：`0015` → `0018`
 
 四条迁移的共同前提：2026-11-12 复核发现「只用迁移链从空库升级到 head」的库
@@ -210,7 +214,8 @@ NOT NULL 并提示先补归属——历史上的虚拟 ID 无法还原，迁移�
 
 ## 9. 已知遗留
 
-- 静态守卫的匹配精度问题（子串匹配误判 `oauth.id`、变量中转绕过、大小写/空格变体）见 §2。
+- ~~静态守卫的匹配精度问题（子串匹配误判 `oauth.id`、变量中转绕过、大小写/空格变体）见 §2。~~
+  **已收敛**（2026-11-13）：守卫改为 AST 扫描，误报与漏拦归零，见 §11。
 - ADR-0006「负面/权衡」已记录：`quality_rules` 出现 NULL 归属行后，按 `api_key_id` 分组的
   统计需要显式处理 NULL 桶；含 `api_key_id` 的唯一约束在 PG 中 NULL 互不相等，超管可以
   创建同名标准。
@@ -283,3 +288,126 @@ root 已有的 24 KB 运维手册（交付/安装/排障/凭证）与这份 3.7 
 | `scripts/migrate_auth_patterns.py` | `py_compile` 通过；`--dry-run` 输出 `Total: 0 files, 0 changes` |
 | 版本位点 | **不变**（仍 `2.25.1` / `v2.25.1`）：本轮是纯文档与注释，无功能变更，不重走 6 位点 |
 
+
+## 11. 文档体系整理 + 静态守卫精度（2026-11-13，版本号不变）
+
+本节是 v2.25.1 之后的第三批收敛（§10 为第二批）：**纯文档与测试实现，无运行时行为变更**，
+版本位点不动（仍 `2.25.1` / `v2.25.1`，不重走 6 个位点，不新建 `revision_v2_25_2.md`）。
+
+触发点很具体：`BASELINE.md` §10 的目录树停在 v2.22.3 而标注是「2026-09-29 复核」，
+`docs/README.md` 把 7 个 v2.19.x 压成一行 `v2.19_6 ~ v2.19_0`，于是「索引/基准线与磁盘
+不符」这件事没有任何机制能发现——顺带把 §2 自陈的静态守卫精度遗留一并收掉。
+
+### 11.1 收敛的 8 处文档不一致
+
+| # | 位置 | 收敛前的事实 | 处理 |
+|---|---|---|---|
+| 1 | `BASELINE.md:21` | 仍有 `> **当前版本**: v2.24.0 · …` 整段，与顶部（L4）和 §15（`2.25.1`）矛盾 | 改为「历史累计串（截至 v2.24.0，**已停用**）」，指向 §15 |
+| 2 | `BASELINE.md` §2 目录树 | `docs/` 注释写「revision_history + adr/ADR-0001 + review_v2.16.0 + archive/」，漏 5 类资产 | 补齐 `README` 索引 / `adr/ADR-0001~0006` / `docker/` / `deploy/` / `superpowers/` |
+| 3 | `BASELINE.md` §10 | 主目录树停 v2.22.3，漏 `revision_v2_23_0`/`24_0`/`25_0`/`25_1`、`README.md`、`adr/`、`docker/`、`deploy/`、`superpowers/`；标「2026-09-29 复核」 | 整棵树重写为「2026-11-13 复核」版，archive 标注「顶层 30 + legacy_root 8 = 38」 |
+| 4 | `BASELINE.md` §15 发版清单第 4 项 | 要求改 `deploy_windows.bat` 标题版本号，而 §15「当前版本」已声明它退役、无版本标题 | 标 `[x] ~~…~~` 且写明「不是版本位点」 |
+| 5 | `CLAUDE.md` §4 | 同样把 `deploy_windows.bat` 算作版本位点 | 明确「6 个版本位点」并点名该文件退役，引用 `test_release_positions_are_consistent` |
+| 6 | `CLAUDE.md` §2 / §3 | 同步清单缺 `docs/README.md`、`docs/adr/`、`revision_history.md`、§10、§13；`technical_spec_*`/`test_manual_*` 实际全在 `archive/` | 重写两张表，技术方案/测试手册改为「直接写 `docs/archive/`」 |
+| 7 | `docs/README.md` | 17 个 revision 压缩成一行；漏 `qc_redesign_v5.html`；无 archive 计数；无「两布局同一份」说明 | 全文重写：17 个 revision 逐条 + ADR 6 条 + docker/deploy 索引 + `superpowers/` plans 5 & specs 4 + archive 38 |
+| 8 | `docs/revision_history.md` | v2.25.1 段仍写「**遗留**：`scripts/migrate_auth_patterns.py:81-82` 仍教写 `auth.id`」——§10.3 已修 | 追加两条收敛条目（**不改旧段**，遵守「只追加」规则），头部「最后更新」改 2026-11-13 |
+
+顺带校正 3 处**计数**（都能用 `ls` 复核）：
+
+- 主目录 revision 文档实为 **17 个**：`v2.19.0`–`v2.19.6`（7）+ `v2.20.0`/`v2.21.0`/`v2.22.0`/`v2.22.1`/`v2.22.2`/`v2.22.3`/`v2.23.0`/`v2.24.0`/`v2.25.0`/`v2.25.1`（10）。
+- §10 里两条旧注记的计数与磁盘不符：「v2.22.3 续」称 **16 个**、「v2.22.2 复核修正」称 **15 个**；
+  按当时应有文件复核应为 **13 个**。已在注记里写明更正，不回改原句。
+- `archive/` **顶层 30 个** + `legacy_root/` 8 个 = **38**；其中 `proposal_*.md` 实为 **1 个**（原记 2 个）。
+
+### 11.2 静态守卫：子串匹配 → AST
+
+`tests/test_super_admin_ownership_p8.py::TestNoVirtualKeyIdWrites` 的扫描主体重写：
+
+| 组件 | 作用 |
+|---|---|
+| `_dotted_name(node)` | 把属性链还原成 `a.b.c`；基不是 `ast.Name`（调用/下标/字面量）就返回 `''` |
+| `_violations(tree)` | 找 `ast.Attribute(attr=="id")` 且基名 ∈ `{auth, api_key}`；另找 `getattr(<base>, "id")` |
+| `_render(rel, lineno, raw)` | 用原始源码行渲染违规行（AST 的 `lineno` 在跨行链上指向**基名那一行**，如实反映） |
+| `_scan` | `ast.parse` 成功走 AST；`SyntaxError` 时退回 `_mask_strings_and_comments` + `_FORBIDDEN_SUBSTRINGS` 子串兜底（宁可误报，不可漏报） |
+
+一次归零的四类漏拦 + 一类误报：
+
+| 形态 | 改造前 | 改造后 |
+|---|---|---|
+| `oauth.id` / `my_auth.id` | **误报**（子串包含） | 不报（`Name` 相等比较） |
+| `auth . id`（空格） | 漏 | 报 |
+| 跨行 `(\n auth\n .id\n)` | 漏 | 报（`Attribute.lineno` 指向 `auth` 行） |
+| `self.auth.id` 嵌套链 | 漏 | 报（基名取属性链最后一段） |
+| `getattr(auth, "id")` | 漏 | 报（单独识别 `ast.Call`） |
+| `x = auth.id` 变量中转 | 漏（原描述） | 报——**读点本身即违规**，与它后面流向哪里无关 |
+
+**基名比较大小写敏感**，这是本节的第二个裁决，也是首版实现的 bug：首版为「顺手覆盖
+`Auth.id`」写了 `.lower()` 匹配，结果在真实 `app/` 上误报 **4 处 `ApiKey.id`**：
+
+```
+app/api/v1/admin.py:105  result = await db.execute(select(ApiKey).where(ApiKey.id == key_id))
+app/api/v1/admin.py:166  result = await db.execute(select(ApiKey).where(ApiKey.id == key_id))
+app/api/v1/admin.py:236  select(ApiKey.group_id, func.count(ApiKey.id).label("cnt"))
+app/core/deps.py:59      select(ApiKey).where(ApiKey.id == key_id, ApiKey.is_active == True)
+```
+
+这 4 处都是 **ORM 列表达式**（`select(...).where(...)`、`func.count(...)`），合法且必要。
+因此禁令牌只保留 `{auth, api_key}` 且比较**不转小写**；`apikey` 变体一并删掉。
+
+**`Auth.id` 判为「不该拦」而非「补上」**：`app/` 下不存在 `Auth` 标识符（`AuthContext` 是另一个名字，
+SQL 里的 `:auth` 是字符串参数），而 `Auth` 作为**类**引用时不可能等于「当前请求的虚拟 ID」——
+它压根不是实例属性。故本条**推翻 §2 原文**「`Auth.id` 大小写变体……目前都不拦」的措辞：
+不是遗留，是误判。
+
+新增 6 条单元用例（都直接驱动 `_scan`，红绿双向）：
+
+| 用例 | 断言 |
+|---|---|
+| `test_oauth_id_is_not_an_offender` | `oauth.id` / `my_auth.id` / `token.api_key_id` → 0 条 |
+| `test_orm_column_and_class_refs_are_not_offenders` | `select(ApiKey).where(ApiKey.id == …)` / `Auth.id` → 0 条（钉住 4 处真实误报） |
+| `test_space_variant_is_caught` | `auth . id` / `api_key .id` → 2 条 |
+| `test_cross_line_and_nested_chains_are_caught` | 跨行 `(\n auth\n .id\n)` + `self.auth.id` → 2 条 |
+| `test_getattr_variant_is_caught` | `getattr(auth, "id")` 报、`getattr(oauth, "id")` 不报 |
+| `test_unparseable_file_falls_back_to_substring_scan` | 语法错误文件仍报 `X = auth.id`，且计入扫描数 |
+
+### 11.3 新增 2 条 docs 结构守卫
+
+| 用例 | 断言 |
+|---|---|
+| `test_docs_index_lists_every_top_level_file` | `docs/` 顶层每个 `.md` / `.html`（除 `README.md`）都必须出现在 `docs/README.md` 文本里；豁免集合 `_INDEX_EXEMPT` 当前为空 |
+| `test_baseline_docs_section_tracks_current_structure` | 解析 §10 的**目录树代码块**，条目集合必须覆盖 `README.md`、`adr/`、`docker/README.md`、`deploy/README.md`、`superpowers/`、`archive/` 与当前版本 revision（版本号从 `app/main.py` 派生，发版不用改测试） |
+
+**这里有一次自我纠错，值得留档**：`test_baseline_docs_section_tracks_current_structure` 首版
+写的是「`adr/` 等字符串出现在 §10 全文即可」。反向验证时把树里的 `├── adr/` 整行删掉，
+测试**仍然通过**——因为下面「2026-11-13 复核」的注记段落里也写了 `adr/`。守卫等于同义反复，
+比没有守卫更危险（它会让人以为已经守住）。改成 `_docs_tree_entries()` 解析代码块、只认
+去掉树形符号与行尾注释后的条目名，同一变异立即变红。
+
+### 11.4 反向验证
+
+文档守卫（每条都是「变异 → 红 → 还原 → 绿」，还原后逐字节比对工作区与备份）：
+
+| 变异 | 期望报错 | 实际 |
+|---|---|---|
+| `docs/README.md` 删掉 `review_v2.16.0.md` 条目 | `未索引这些顶层文件: ['review_v2.16.0.md']` | 红 ✅ |
+| `BASELINE.md` §10 树里删 `├── adr/`（叙述段落仍含 `adr/`） | `目录树未覆盖: ['ADR 目录']` | 红 ✅（首版此处为绿，见 §11.3） |
+| §10 树里删 `├── README.md` | `目录树未覆盖: ['docs 总索引']` | 红 ✅ |
+| §10 树里删 `├── revision_v2_25_1.md` | `目录树未覆盖: ['当前版本 revision']` | 红 ✅ |
+| `docs/README.md` 的 `../deploy/README.md` 改成 `../deploy/NOPE.md` | `docs\README.md -> ../deploy/NOPE.md` | 红 ✅ |
+
+静态守卫端到端（证明它对真实 `app/` 不是空转）：在 `app/` 下临时放 `_guard_probe_tmp.py`，
+内容为跨行 `(\n auth\n .id\n)`：
+
+```
+注入后 → FAILED，报 app/_guard_probe_tmp.py:4: auth
+删除后 → 1 passed，残留文件 False
+```
+
+### 11.5 验收
+
+| 项 | 结果 |
+|---|---|
+| 定向测试 | `tests/test_docs_index_links.py` + `tests/test_super_admin_ownership_p8.py` → **26 passed**（7 + 19） |
+| 全量（monorepo 布局） | **1899 passed / 9 skipped**，覆盖率 **99.90%**，EXIT=0（发布时 1886，§10 后 1891，本轮 +8：6 条 AST 用例 + 2 条 docs 结构守卫） |
+| 反向验证 | 5 条文档变异全部变红并逐字节还原；真实 `app/` 注入 1 条违规变红、删除后绿 |
+| 版本位点 | **不变**（仍 `2.25.1` / `v2.25.1`）：无运行时行为变更 |
+| 明确未做 | 未把主目录旧 revision 移入 `archive/`——改动归档策略属破坏性整理，留给单独立项决定 |

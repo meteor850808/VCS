@@ -10,6 +10,7 @@
 同时用静态扫描兜住「新增代码又写回虚拟 ID」的回归。
 """
 
+import ast
 import io
 import tokenize
 import uuid
@@ -179,9 +180,18 @@ class TestNoVirtualKeyIdWrites:
     `AuthContext.id` 直接委托 `api_key.id`，超管下同样返回虚拟 ID
     `00000000-...-0001`，写进带外键的列会 500。唯一允许出现这两者的文件是
     `app/core/auth_context.py` —— 它负责产出 `id` 与 `owner_id`。
+
+    扫描方式是 **AST**（见 `_violations`）：匹配的是「属性名 `id` + 基名 `auth` /
+    `api_key`」的节点，不是文本子串。只有 `ast.parse` 失败时才退回
+    tokenize 屏蔽 + 子串兜底（宁可误报，不可漏报）。
     """
 
-    _FORBIDDEN = ("api_key.id", "auth.id")
+    # AST 解析失败时的兜底子串（宁可误报，不可漏报）
+    _FORBIDDEN_SUBSTRINGS = ("api_key.id", "auth.id")
+    # 属性基名（**大小写敏感**）：`auth.id` / `api_key.id` 是请求级实例。
+    # 不取小写匹配，因为 `ApiKey.id` 是 ORM 列表达式（app 里真实出现 4 次，合法），
+    # `Auth.id` 是类引用——二者都不可能是「当前请求的虚拟 ID」。
+    _FORBIDDEN_BASE_NAMES = frozenset({"auth", "api_key"})
     _EXEMPT_FILES = {"app/core/auth_context.py"}
     # 扫描面下限：`app/` 当前有 126 个 .py。若路径算错导致 rglob 扫空，
     # 守卫会静默变绿；用下限把「空扫描」变成显式失败。
@@ -200,8 +210,8 @@ class TestNoVirtualKeyIdWrites:
     def _mask_strings_and_comments(text: str) -> list[str]:
         """把字符串与注释替换成空格，保留行号与列位置。
 
-        目的：文档/注释里提到 `auth.id` 不算违规，而真正写在表达式里的
-        （含 f-string 内的表达式）仍然保留原样，可被下面的包含匹配抓到。
+        仅在 `ast.parse` 失败时作为兜底：文档/注释里提到 `auth.id` 不算违规，
+        而真正写在表达式里的仍保留原样，可被子串匹配抓到。
         """
         lines = text.splitlines()
         chars = [list(line) for line in lines]
@@ -223,6 +233,56 @@ class TestNoVirtualKeyIdWrites:
             pass
         return ["".join(row) for row in chars]
 
+    @staticmethod
+    def _dotted_name(node: ast.AST) -> str:
+        """把属性链还原成 `a.b.c`；含调用/下标/字面量等无法静态确定的一律返回 ''。"""
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return ""
+        parts.append(node.id)
+        return ".".join(reversed(parts))
+
+    @classmethod
+    def _violations(cls, tree: ast.AST) -> list[tuple[int, str]]:
+        """在 AST 上找违规引用，返回 [(行号, 表达式)]。
+
+        用 AST 而不是子串，正是为了修掉子串匹配的假阳性/假阴性：
+        `oauth.id` 不是 `auth.id`（Name 相等而非包含）、`auth . id` 的空格、
+        跨行属性链、`getattr(auth, "id")`，以及 `x = auth.id` 这种「中转」——
+        读点本身即违规，与它后面流向哪里无关。
+        """
+        hits: list[tuple[int, str]] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr == "id":
+                base = cls._dotted_name(node.value)
+                if base and base.split(".")[-1] in cls._FORBIDDEN_BASE_NAMES:
+                    hits.append((node.lineno, cls._dotted_name(node)))
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if (
+                    isinstance(func, ast.Name)
+                    and func.id == "getattr"
+                    and len(node.args) >= 2
+                ):
+                    target = cls._dotted_name(node.args[0])
+                    attr = node.args[1]
+                    if (
+                        target
+                        and target.split(".")[-1] in cls._FORBIDDEN_BASE_NAMES
+                        and isinstance(attr, ast.Constant)
+                        and attr.value == "id"
+                    ):
+                        hits.append((node.lineno, f'getattr({target}, "id")'))
+        return hits
+
+    @staticmethod
+    def _render(rel: str, lineno: int, raw_lines: list[str]) -> str:
+        raw = raw_lines[lineno - 1] if lineno <= len(raw_lines) else ""
+        return f"{rel}:{lineno}: {raw.strip()}"
+
     @classmethod
     def _scan(cls, root: Path) -> tuple[list[str], int]:
         """扫描 `root/app` 下的 .py，返回 (违规行列表, 实际扫描文件数)。"""
@@ -235,11 +295,20 @@ class TestNoVirtualKeyIdWrites:
             scanned += 1
             text = path.read_text(encoding="utf-8")
             raw_lines = text.splitlines()
-            code_lines = cls._mask_strings_and_comments(text)
-            for no, code in enumerate(code_lines, 1):
-                if any(token in code for token in cls._FORBIDDEN):
-                    raw = raw_lines[no - 1] if no <= len(raw_lines) else code
-                    offenders.append(f"{rel}:{no}: {raw.strip()}")
+            try:
+                tree = ast.parse(text)
+            except SyntaxError:
+                # 解析失败时信息不足，退回 tokenize 屏蔽 + 子串（宁可误报，不可漏报）
+                for no, code in enumerate(cls._mask_strings_and_comments(text), 1):
+                    if any(token in code for token in cls._FORBIDDEN_SUBSTRINGS):
+                        offenders.append(cls._render(rel, no, raw_lines))
+                continue
+            seen: set[int] = set()
+            for lineno, _expr in cls._violations(tree):
+                if lineno in seen:  # 同一行多处只报一次
+                    continue
+                seen.add(lineno)
+                offenders.append(cls._render(rel, lineno, raw_lines))
         return offenders, scanned
 
     @classmethod
@@ -291,6 +360,72 @@ class TestNoVirtualKeyIdWrites:
         (app / "demo.py").write_text('Z = f"owner={auth.id}"\n', encoding="utf-8")
         offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
         assert offenders == ['app/demo.py:1: Z = f"owner={auth.id}"']
+
+    def test_oauth_id_is_not_an_offender(self, tmp_path):
+        """`oauth.id` 曾是子串匹配的假阳性；AST 按 Name 相等比较后不再误报。"""
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text(
+            "T = oauth.id\nU = my_auth.id\nV = token.api_key_id\n", encoding="utf-8"
+        )
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert offenders == []
+
+    def test_orm_column_and_class_refs_are_not_offenders(self, tmp_path):
+        """`ApiKey.id` 是 ORM 列表达式、`Auth.id` 是类引用，都不是「当前请求的虚拟 ID」。
+
+        真实回归依据：改造前的首版实现取小写匹配，在 `app/` 里误报 4 处
+        `ApiKey.id`（`admin.py:105/166/236`、`deps.py:59`）——这类列表达式必须放行。
+        """
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text(
+            "W = select(ApiKey).where(ApiKey.id == key_id)\nX = Auth.id\n",
+            encoding="utf-8",
+        )
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert offenders == []
+
+    def test_space_variant_is_caught(self, tmp_path):
+        """`auth . id`（空格）等价于 `auth.id`，子串匹配曾漏。"""
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text("A = auth . id\nB = api_key .id\n", encoding="utf-8")
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert offenders == [
+            "app/demo.py:1: A = auth . id",
+            "app/demo.py:2: B = api_key .id",
+        ]
+
+    def test_cross_line_and_nested_chains_are_caught(self, tmp_path):
+        """跨行属性链与 `self.auth.id` 嵌套链同样命中。"""
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text(
+            "C = (\n    auth\n    .id\n)\nD = self.auth.id\n", encoding="utf-8"
+        )
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert len(offenders) == 2
+        assert all(o.startswith("app/demo.py:") for o in offenders)
+
+    def test_getattr_variant_is_caught(self, tmp_path):
+        """`getattr(auth, "id")` 绕过属性语法，AST 单独识别。"""
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "demo.py").write_text(
+            'E = getattr(auth, "id")\nF = getattr(oauth, "id")\n', encoding="utf-8"
+        )
+        offenders, _ = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert offenders == ['app/demo.py:1: E = getattr(auth, "id")']
+
+    def test_unparseable_file_falls_back_to_substring_scan(self, tmp_path):
+        """解析失败的文件不能被静默跳过：退回子串扫描，宁可误报。"""
+        app = tmp_path / "app"
+        app.mkdir(parents=True)
+        (app / "broken.py").write_text("X = auth.id\nG = (\n", encoding="utf-8")
+        offenders, scanned = TestNoVirtualKeyIdWrites._scan(tmp_path)
+        assert scanned == 1
+        assert offenders == ["app/broken.py:1: X = auth.id"]
 
     def test_empty_scan_is_a_failure_not_a_pass(self, tmp_path):
         (tmp_path / "app").mkdir()
