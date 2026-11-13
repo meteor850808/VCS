@@ -1299,7 +1299,8 @@ tests/
 ```
 
 > **v2.25.1 新增**：`tests/test_migration_0015.py`（规则归属列可空）、`test_migration_0016.py`（缺列/类型同步）、`test_migration_0017.py`（外键与归属列）、`test_migration_0018.py`（11 条静态守卫：注释/JSONB/NOT NULL 预检/索引/约束改名/要素表 FK/降级有损声明）、`test_super_admin_ownership_p8.py`（6 个超管写端点 + `app/` 静态扫描守卫）。
-> **v2.25.1 后续收敛新增**：`tests/test_docs_index_links.py`（5 条 docs 索引守卫：索引文件存在性 / markdown 相对链接可解析 / 反引号内 `../` 路径可解析 / ADR 全覆盖 / 当前版本 revision 已索引）。
+> **v2.25.1 后续收敛新增**：`tests/test_docs_index_links.py`（**7 条** docs 结构守卫：索引文件存在性 / markdown 相对链接可解析 / 反引号内 `../` 路径可解析 / ADR 全覆盖 / 当前版本 revision 已索引 / `docs/` 顶层文件全进索引 / BASELINE §10 目录树覆盖当前结构——后两条为 2026-11-13 新增）。
+> **2026-11-13 收敛**：`tests/test_super_admin_ownership_p8.py` 的静态扫描由子串匹配改为 **AST**（`ast.Attribute(attr=="id")` + 基名 ∈ `{auth, api_key}`、`getattr(x,"id")`，解析失败回落 tokenize + 子串），并新增 6 条用例（`oauth.id` 不误报、`ApiKey.id`/`Auth.id` 放行、空格变体、跨行/嵌套链、`getattr`、不可解析文件回落）；全量 **1899 passed / 9 skipped**。
 > 迁移文件**不能被测试 import**（项目根 `alembic/` 会遮蔽已安装包），守卫测试用 `ast.literal_eval` 读取迁移文件里的常量。
 
 `tests/conftest.py`（2026-09-01 新增）承载共享 `_test_engine`/`_TestSession`/`override_get_db`/
@@ -1336,7 +1337,7 @@ tests/
 
 ```bash
 # 需要先启动 PostgreSQL + Redis
-.venv\Scripts\python.exe -m pytest tests/ -v                      # 详细输出（全量 1891 passed / 9 skipped, v2.25.1 + 后续收敛）
+.venv\Scripts\python.exe -m pytest tests/ -v                      # 详细输出（全量 1899 passed / 9 skipped, v2.25.1 + 后续收敛）
 .venv\Scripts\python.exe -m pytest tests/ -v --cov=app           # 覆盖率
 .venv\Scripts\python.exe -m pytest tests/ -v --cov=app --cov-report=xml  # XML 报告
 ```
