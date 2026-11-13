@@ -1,7 +1,7 @@
 # VCS 空间质检 — 版本修订记录汇总
 
 > **维护规则**: 每次发版追加新版本段落，不修改旧段落。  
-> **最后更新**: 2026-11-12  
+> **最后更新**: 2026-11-13  
 > **当前版本**: v2.25.1
 
 ---
@@ -21,6 +21,8 @@
 - **发布链**：monorepo `8e8862e` → 端口 `edac977` → PR #7 → rebase-merge `f9ea3f8`；9 个改动文件 blob 逐一比对 0 差异
 - **本批同时校正历史偏差**：`BASELINE.md` §15 与 `app/main.py` / `deploy_linux.sh` / `restart.bat` / `revision_history.md` 头部此前仍停在 2.24.0 / v2.23.0
 - **遗留**：`scripts/migrate_auth_patterns.py:81-82` 仍教写 `auth.id`（不在 `app/` 下，守卫覆盖不到）
+- **后续收敛（2026-11-13，版本号不变）**：上面两条遗留已处理——① `docs/README.md` / `docs/docker/README.md` / `docs/deploy/README.md` 端口到 root，并修掉子索引少一层 `../` 的既有路径 bug（`docs/revision_v2_25_1.md` §10）；② `scripts/migrate_auth_patterns.py` 加「已执行完毕」声明、删死路径、改正 Pattern 3 注释（原文教写 `auth.id`，与 ADR-0006 相反）
+- **文档体系整理 + 守卫精度（2026-11-13，版本号不变）**：`BASELINE` §2 目录树 / §10 docs 体系 / §15 发版清单 / 顶部历史累计串的陈旧项收敛；`docs/README.md` 补齐 17 个 revision、`qc_redesign_v5.html`、`superpowers/`、archive 计数；`CLAUDE.md` §2–§4 同步；静态守卫 `TestNoVirtualKeyIdWrites` 由子串匹配改 AST 扫描（`oauth.id` 误报、`auth .id` / `Auth.id` / 跨行链 / `getattr(auth,"id")` 漏拦归零）；新增 2 条 docs 结构守卫（`docs/revision_v2_25_1.md` §11）
 
 ---
 
